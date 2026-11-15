@@ -508,8 +508,8 @@ def build():
         # The box is always there when Gmail was read, weekends too: empty = "inbox up to date".
         "classifieds_block": has_mail or bool(mail_failed) or not a.share,
         "classifieds_empty": has_mail and not classifieds,
-        # A scheduled run sends no message, so a security alert would reach nobody: one neutral
-        # line in the box, never which account or what happened.
+        # Legacy (v1.4.0-v1.4.1): alerts now go in the edition summary; still accepted so older
+        # edition files build. One neutral line, never which account or what happened.
         "security_alert": has_mail and bool(ed.get("security_alert")) and not a.share,
         "SECTIONS_HTML": sections_html(cfg, sections, L), "week": bool(week),
         "extras": bool(hist.get("text") or dyk.get("text")),

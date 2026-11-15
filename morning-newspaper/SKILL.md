@@ -93,7 +93,7 @@ Follow `references/archive.md` ("Finding the newsstand"). From it, save `config.
 In the same block of calls:
 - **Script:** `python3 SKILL/scripts/collect.py --config WORK/config.json --work WORK --index WORK/index.json` (omit `--index` if there is none). It prints the date, issue number, weather, candidate stories per section with short IDs (`a1`, `b2`…), "On this day" candidates (`h1`…) and a `FAILURES` line if a source did not answer. It already applies the date window (48 h; 72 h on Mondays and weekends), drops stories used in the last 14 editions and anything matching the reader's `avoid` list, and takes turns between a section's searches so the candidates cover all of them.
 - **Agenda (Google Calendar):** one listing from today 00:00 to tomorrow 23:59, primary calendar only. Tomorrow's events only feed an optional preparation note. A successful answer with no `items` field means no events; a failed call is not a free day (see below).
-- **Email (Gmail):** one search: `in:inbox newer_than:2d -category:promotions -category:social -category:updates -category:forums -from:me` (`newer_than:3d` on Saturdays, Sundays and Mondays, like the news window). Open (once each) only conversations that seem to ask the reader for something; if the reader already replied, it becomes "resolved" or is dropped. Automatic notifications are never classifieds. A security alert (new sign-in, password change) is mentioned to the reader in the interactive reply; in a scheduled run, where no message is sent, set `"security_alert": true` instead, which prints one neutral line in the classifieds box (never which account or what happened).
+- **Email (Gmail):** one search: `in:inbox newer_than:2d -category:promotions -category:social -category:updates -category:forums -from:me` (`newer_than:3d` on Saturdays, Sundays and Mondays, like the news window). Open (once each) only conversations that seem to ask the reader for something; if the reader already replied, it becomes "resolved" or is dropped. Automatic notifications are never classifieds. A security alert (new sign-in, password change) never goes in the paper: it goes in the **Attention** line of the edition summary (step 8), in scheduled runs too.
 
 **Fallback, only when something is missing:** if a section failed in the script (`FAILURES`) and came back empty, do one web search for it with the current month and year. Weather unavailable: one search for today's forecast in the reader's city; without a reliable result, `"weather": false`.
 
@@ -106,7 +106,7 @@ In the same block of calls:
 
 **Secondary stories are not researched:** their 1–2 sentences come from title and summary. One exception: when the title does not name what it is about ("a free city-builder on Steam", "a farming sim announced"), one search only to find that name, at most twice per edition. Not found: leave the story out.
 
-Calendar or Gmail never connected: leave its key out of `edition.json`. The box stays and says the connector is not connected and that connecting it syncs the content, so no extra line in the reply is needed.
+Calendar or Gmail never connected: leave its key out of `edition.json`. The box stays and says the connector is not connected and that connecting it syncs the content; the edition summary adds one **Missing** line (step 8).
 
 Connected, but the call fails: try once more. Still failing, set `agenda_error` (or `classifieds_error`) to the reason in a few words in the reader's language (e.g. "o conector não respondeu", "acesso expirado, conecte de novo"; `true` if unknown). The box then says it could not be read and why. Never print "free agenda" or "inbox up to date" for a calendar or inbox you could not read.
 
@@ -152,8 +152,23 @@ Follow `references/archive.md` ("Adding today's edition"). Publish exactly the f
 
 - First run (just after setup): the summary described at the end of `references/setup.md`.
 - Only the newspaper: send the HTML file the script printed, with one sentence on why there is no newsstand and, for a copy to share, what was left out.
-- Any other interactive run: one sentence with today's headline, in the reader's language (the artifact card already shows the link). If no scheduled task runs this newspaper (check when the scheduled-task tools can list them), add one short line saying they can ask at any time to get it every morning ("schedule my newspaper").
-- Scheduled run: just publish; send no messages.
+- Every other run, scheduled or interactive: the session's final reply is always shown to the reader, so it is the **edition summary** below and nothing else. Send no other messages.
+
+**Edition summary.** At most four lines, in `config.language`, with the labels translated (pt-BR: "Atenção", "Faltando"; es: "Atención", "Falta"). Each line appears only when it has something to say:
+
+```
+**Edition No. 004 is out at the newsstand.** Headline: *Jensen Huang steps down as Nvidia's CEO.*
+**Attention:** 2 sign-in alerts in your email (OpenAI and Venice.ai). Check that it was you.
+**Missing:** I couldn't reach Gmail (the connector failed).
+📅 Whenever you want it every morning, just send me "schedule my newspaper".
+```
+
+1. Always: the edition number and today's headline (the artifact card already shows the link).
+2. **Attention:** only what asks the reader to act. Today that means security alert emails (new sign-in, password change): how many and which accounts, never codes, links or details.
+3. **Missing:** only when Calendar or Gmail is not connected or failed after the second try, or the weather or a whole section came out empty. One line, plain words, no technical details.
+4. 📅 Only in an interactive run when no scheduled task runs this newspaper (check when the scheduled-task tools can list them).
+
+Never in the summary: the agenda or emails waiting for a reply (they are in the paper), a sources list (the paper carries its sources), the steps taken, checks, unconfirmed numbers, newsstand or script details, or any other caveat. The reader asks if they want more.
 
 ## Safety rules
 

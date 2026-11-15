@@ -91,3 +91,33 @@ def test_setup_does_not_ask_for_the_newspaper_name():
     assert "name" not in screen2.lower()
     for option in ("Don't schedule for now", "Another time", "(Recommended)"):
         assert option in setup, option
+
+
+def deliver_section():
+    text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+    m = re.search(r"^### 8\. Deliver\n(.*?)(?=^## )", text, re.S | re.M)
+    assert m, "SKILL.md needs a '### 8. Deliver' step"
+    return m.group(1)
+
+
+def test_edition_summary_model():
+    """The final reply is a short edition summary, in scheduled runs too (v1.4.2)."""
+    deliver = deliver_section()
+    assert "scheduled or interactive" in deliver
+    assert "send no messages" not in deliver.lower()
+    assert "At most four lines" in deliver
+    example = re.search(r"```\n(.*?)\n```", deliver, re.S)
+    assert example, "the summary model needs an example block"
+    lines = example.group(1).splitlines()
+    assert 1 <= len(lines) <= 4
+    assert lines[0].startswith("**Edition No.")
+    for label in ("**Attention:**", "**Missing:**"):
+        assert label in deliver
+    for banned in ("sources list", "agenda or emails waiting for a reply"):
+        assert banned in deliver, f"the summary must keep '{banned}' out"
+
+
+def test_security_alerts_go_to_the_summary():
+    text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+    assert '"security_alert": true' not in text
+    assert "never goes in the paper" in text

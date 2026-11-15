@@ -2,6 +2,13 @@
 
 All notable changes to Morning Newspaper. Each release on GitHub uses the matching section below as its notes.
 
+## v1.4.2 — 2026-11-15
+
+### Fixed
+- **Short edition summary**: scheduled runs were told to "send no messages", but a session always ends with a reply the reader sees, so it came out as a long report in English (sources, caveats, newsstand details). Every edition now ends with the same summary, in the paper's language and at most four lines: the edition number and headline; **Attention** only for what needs the reader (security alert emails, with the accounts); **Missing** only when a connector is off or failed, or the weather or a section came out empty; and, in runs asked by hand with no schedule, the "schedule my newspaper" reminder. No agenda, sources list or caveats.
+- **Security alerts** go in the summary's Attention line in every run, no longer in the paper. `security_alert` in the edition file is still accepted, so older files build.
+- **Sample edition** ends with one sentence on how to set the newspaper up.
+
 ## v1.4.1 — 2026-11-14
 
 ### Fixed

@@ -21,7 +21,7 @@ The only text you write per edition, in the reader's language. `scripts/assemble
 
 Rules:
 - `agenda` and `classifieds`: a list (possibly empty) when the connector was read; an empty list prints "free agenda" / "inbox up to date". Leave the key out when Calendar or Gmail is not connected: the box says it is not connected. Connected but failing after a second try: `"agenda_error": "reason in a few words"` (or `"classifieds_error"`; `true` when the reason is unknown): the box says it could not be read and why. In a copy to share (`--share`) a left-out key hides the box instead.
-- `security_alert`: `true` only in a scheduled run that found a security alert email (new sign-in, password change). It adds one neutral line to the classifieds box. In an interactive run tell the reader in the reply instead.
+- `security_alert`: not used since v1.4.2 (security alerts go in the **Attention** line of the edition summary, SKILL.md step 8). Still accepted, so older edition files build: it adds one neutral line to the classifieds box.
 - The classifieds box is printed every day when Gmail was read, weekends included: an empty list prints "inbox up to date".
 - `history` uses an "On this day" candidate (`h1`, `h2`…), never a news ref. Without a collected `h` ref (fallback search): `{"text": "In 1969, ...", "url": "https://source"}`.
 - `did_you_know` always carries the `url` of the page that confirmed it; nothing confirmed, leave it out.

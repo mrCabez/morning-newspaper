@@ -20,4 +20,4 @@ Steps 2 to 5 of SKILL.md as usual (agenda and email only if connected), with two
 
 ## 3. Publish
 
-Publish to the newsstand as in `references/archive.md` (it is created if missing). Do not create, change or delete scheduled tasks. Send no messages: the notice at the top of the edition is the message.
+Publish to the newsstand as in `references/archive.md` (it is created if missing). Do not create, change or delete scheduled tasks. Send no other messages. The session's final reply is shown to the reader, so make it one sentence in the edition's language: a sample edition is out at the newsstand, and to personalize it they can send "set up my newspaper".
