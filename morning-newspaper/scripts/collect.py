@@ -10,6 +10,7 @@ In one pass, without spending model tokens, it fetches:
 
 It writes everything to WORK/collected.json (used later by assemble.py) and prints a compact
 summary with a short ID per story (a1, b3, ...; h1... for history), which is what the model reads.
+Every run also appends its command and output to WORK/run.log (for debug reports; the model does not read it).
 
 Standard library only. Only performs read-only GET requests to the hosts listed in the config
 and to wttr.in, api.open-meteo.com and *.wikipedia.org. Only writes inside WORK.
@@ -790,6 +791,42 @@ def network_blocked(cfg, day):
 
 # ---------------------------------------------------------------- main
 
+class _Tee:
+    """Everything printed also goes to WORK/run.log, written by the script itself: a debug report can
+    quote the real output later, and the model spends no tokens on it (it never reads the log)."""
+
+    def __init__(self, out, log):
+        self.out, self.log = out, log
+
+    def write(self, txt):
+        self.out.write(txt)
+        try:
+            self.log.write(txt)
+        except (OSError, ValueError):
+            pass
+        return len(txt)
+
+    def flush(self):
+        self.out.flush()
+        try:
+            self.log.flush()
+        except (OSError, ValueError):
+            pass
+
+
+def start_log(work, script):
+    """Appends this run's command, time and output to WORK/run.log. Never blocks the edition."""
+    try:
+        os.makedirs(work, exist_ok=True)
+        log = open(os.path.join(work, "run.log"), "a", encoding="utf-8", buffering=1)
+        now = dt.datetime.now(dt.timezone.utc).astimezone()
+        log.write(f"\n===== {script} · {now.isoformat(timespec='seconds')} · "
+                  f"{' '.join(sys.argv[1:])}\n")
+        sys.stdout = _Tee(sys.stdout, log)
+    except OSError:
+        pass
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True, help="reader's config.json")
@@ -799,6 +836,7 @@ def main():
     ap.add_argument("--from-results", metavar="FILE",
                     help="no network: filter and rank the web search results in FILE instead of fetching")
     a = ap.parse_args()
+    start_log(a.work, "collect.py")
 
     # Check the working folder before spending a minute on the network.
     try:
@@ -931,4 +969,7 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    rc = main()
+    if isinstance(sys.stdout, _Tee):
+        print(f"[exit {rc}]")
+    sys.exit(rc)

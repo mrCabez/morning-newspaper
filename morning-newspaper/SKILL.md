@@ -141,9 +141,10 @@ Write `WORK/edition.json` with the file-writing tool, in the reader's language, 
 ### 5. Assemble and check
 
 `python3 SKILL/scripts/assemble.py --skill SKILL --config WORK/config.json --work WORK --index WORK/index.json` (omit `--index` the first time; add `--single-page` in the single-page mode).
-- `ERROR:` → nothing was written. Fix the JSON and run again.
+- `ERROR:` → nothing was written. Fix the JSON and run again. It refuses when `WORK/collected.json` is missing (the collection is never skipped) and when the collection printed `NETWORK BLOCKED` but the no-network searches were not done (`references/no-network.md`).
 - `WARNING:` → consider it; it does not block.
-- `OK:` → prints the files to publish (`as` -> path).
+- `OK:` → prints the files to publish (`as` -> path) and a `COVERAGE:` line: how many stories, which sections have them and which came out empty. Step 8 is written from these lines.
+- Both scripts append their command and output to `WORK/run.log` by themselves. Do not read it or send it; it is there only for a debug report the reader asks for.
 
 Visual check only in an interactive session and only if Playwright with Chromium is already installed: a screenshot at 390 px. Install nothing, and do not fall back to another browser (a system browser can hang the session).
 
@@ -178,7 +179,7 @@ Follow `references/archive.md` ("Adding today's edition"). Publish exactly the f
 📅 Whenever you want it every morning, just send me "schedule my newspaper".
 ```
 
-1. Always: the edition number and today's headline (the artifact card already shows the link).
+1. Always: the edition number and today's headline (the artifact card already shows the link). Describe only what the `OK:` and `COVERAGE:` lines say the edition carries: never list sections or topics it does not have, and never announce the edition before `assemble.py` printed `OK:`.
 2. **Attention:** only what asks the reader to act. Today that means security alert emails (new sign-in, password change): how many and which accounts, never codes, links, dates, places, devices or other details.
 3. **Missing:** only when Calendar or Gmail is not connected or failed after the second try, or the weather, a whole section or every story came out empty. One line, plain words, no technical details.
 4. 📅 Only in an interactive run, only when this session has a scheduled-task tool, and only when no scheduled task runs this newspaper (check when the tools can list them). Without a scheduled-task tool there is no 📅 line.

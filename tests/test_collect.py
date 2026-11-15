@@ -749,3 +749,25 @@ def test_blocked_network_is_not_printed_as_nothing_new(collect_module, offline, 
     out = capsys.readouterr().out
     assert "NETWORK BLOCKED" in out
     assert "(nothing new)" not in out and "(not collected: no source answered)" in out
+
+
+# ---------------------------------------------------------------- v1.7.1: run log
+
+def test_collect_writes_its_output_to_run_log(collect_module, offline, monkeypatch, tmp_path, capsys, config):
+    results = {"news": [{"section": "tech", "query": "q", "title": "Browser patches a flaw already under attack",
+                         "url": "https://a.example/1", "outlet": "A"}]}
+    code, out, _ = run_from_results(collect_module, offline, monkeypatch, tmp_path, capsys, config, results)
+    assert code == 0
+    log = (tmp_path / "w" / "run.log").read_text(encoding="utf-8")
+    assert "===== collect.py ·" in log and "--from-results" in log
+    assert out.strip().splitlines()[0] in log
+
+
+def test_collect_run_log_script_mode_records_exit(tmp_path, config):
+    (tmp_path / "config.json").write_text(json.dumps(config), encoding="utf-8")
+    (tmp_path / "results.json").write_text(json.dumps({"news": []}), encoding="utf-8")
+    proc = subprocess.run([sys.executable, str(ROOT / "morning-newspaper" / "scripts" / "collect.py"),
+                           "--config", str(tmp_path / "config.json"), "--work", str(tmp_path / "w"),
+                           "--from-results", str(tmp_path / "results.json")], capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "[exit 0]" in (tmp_path / "w" / "run.log").read_text(encoding="utf-8")

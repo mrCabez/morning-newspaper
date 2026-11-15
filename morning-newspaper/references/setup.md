@@ -54,7 +54,8 @@ The config lives in the reader's newsstand, next to the editions. Run the editio
 
 After the edition, reply in their language with a short summary:
 - today's headline;
-- what was configured (city and topics);
+- what was configured (city and topics), said as settings ("topics: …"), never as what today's edition contains: the edition carries only what the `COVERAGE:` line of `assemble.py` says;
+- one **Missing** line when `COVERAGE:` lists empty sections (as in SKILL.md step 8);
 - only if `avoid` is not empty: the words being avoided, asking whether to remove or add any;
 - which connections are still missing (if any) and the newsstand slug (single page: the artifact, and the sentence from SKILL.md step 8).
 

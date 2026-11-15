@@ -746,3 +746,83 @@ def test_a_day_with_no_story_still_gets_its_edition(assembler):
     assert "No confirmed news today" in page
     assert "Traceback" not in proc.stderr
     assert assembler.new_index()["editions"][0]["headline"] == "No confirmed news today"
+
+
+# ---------------------------------------------------------------- collection, coverage and run log (v1.7.1)
+
+def test_refuses_without_collected_json(assembler):
+    """An edition built without the collection cannot be checked against anything."""
+    assembler.collected = None
+    proc = refused(assembler.run())
+    assert "collected.json not found" in proc.stdout
+
+
+def test_network_blocked_without_fallback_refuses_stories(assembler):
+    assembler.collected["network_blocked"] = True
+    proc = refused(assembler.run())
+    assert "no-network.md" in proc.stdout
+
+
+def test_network_blocked_with_fallback_results_is_fine(assembler):
+    assembler.collected.update(network_blocked=True, from_results=True)
+    ok(assembler.run())
+
+
+def test_network_blocked_with_no_stories_still_prints_the_edition(assembler):
+    assembler.collected["network_blocked"] = True
+    assembler.edition.pop("headline")
+    assembler.edition.pop("sections")
+    proc = ok(assembler.run())
+    assert "COVERAGE: 0 stories" in proc.stdout
+
+
+def test_coverage_names_the_empty_sections(assembler):
+    assembler.edition["sections"] = {"local": assembler.edition["sections"]["local"]}
+    proc = ok(assembler.run())
+    line = next(l for l in proc.stdout.splitlines() if l.startswith("COVERAGE:"))
+    assert line.startswith("COVERAGE: 2 stories")
+    with_part, empty_part = line.split(" · empty: ")
+    titles = {s["id"]: s["title"] for s in assembler.config["sections"]}
+    assert titles["local"] in with_part
+    for sid in ("money", "games"):
+        assert titles[sid] in empty_part
+    assert "Missing line" in proc.stdout
+
+
+def test_coverage_with_every_section_filled(assembler):
+    proc = ok(assembler.run())
+    assert "· empty: none" in proc.stdout
+
+
+@pytest.mark.parametrize("mode", ["--standalone", "--share", "--single-page"])
+def test_every_mode_prints_coverage_and_next_steps(assembler, mode):
+    proc = ok(assembler.run(mode))
+    assert "COVERAGE:" in proc.stdout
+    assert "7. Check every sentence" in proc.stdout
+    assert "8. Reply with the edition summary" in proc.stdout
+
+
+def test_standalone_next_steps_say_send_not_publish(assembler):
+    proc = ok(assembler.run("--standalone"))
+    assert "Nothing to publish: send the file" in proc.stdout
+    assert "6. Publish exactly" not in proc.stdout
+
+
+def test_run_log_keeps_the_real_output(assembler):
+    proc = ok(assembler.run())
+    log = (assembler.tmp / "work" / "run.log").read_text(encoding="utf-8")
+    assert "===== assemble.py ·" in log
+    assert "--work" in log
+    assert proc.stdout.strip().splitlines()[0] in log
+    assert "[exit 0]" in log
+
+
+def test_run_log_appends_runs_including_refusals(assembler):
+    assembler.edition["sections"]["nope"] = []
+    refused(assembler.run())
+    assembler.edition["sections"].pop("nope")
+    ok(assembler.run())
+    log = (assembler.tmp / "work" / "run.log").read_text(encoding="utf-8")
+    assert log.count("===== assemble.py ·") == 2
+    assert "[exit 1]" in log and "[exit 0]" in log
+    assert "is not in config.json" in log

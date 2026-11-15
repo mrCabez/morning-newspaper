@@ -52,7 +52,8 @@ class Assembler:
         cfg_path = self.tmp / "config.json"
         cfg_path.write_text(json.dumps(self.config, ensure_ascii=False), encoding="utf-8")
         (work / "edition.json").write_text(json.dumps(self.edition, ensure_ascii=False), encoding="utf-8")
-        (work / "collected.json").write_text(json.dumps(self.collected, ensure_ascii=False), encoding="utf-8")
+        if self.collected is not None:  # None: the collection was skipped
+            (work / "collected.json").write_text(json.dumps(self.collected, ensure_ascii=False), encoding="utf-8")
         cmd = [sys.executable, str(SCRIPTS / "assemble.py"), "--skill", str(SKILL),
                "--config", str(cfg_path), "--work", str(work), *args]
         index = index if index is not None else self.index

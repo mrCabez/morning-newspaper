@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Builds an edition of the morning newspaper from a short JSON written by the model.
 
-Inputs: WORK/edition.json (format in references/edition-format.md), WORK/collected.json
+Inputs: WORK/edition.json (format in references/edition-format.md), WORK/collected.json (required:
+the collection is never skipped). Every run also appends its command and output to WORK/run.log.
 (from collect.py) and the reader's config.json. Stories can point at collected items by ID
 ("ref": "a3"); the script fills in URL, outlet and date by itself.
 
@@ -72,6 +73,42 @@ LEGACY_TYPES = {"fim de semana": "weekend", "manhã": "morning", "manha": "morni
 DEDUP_EDITIONS = 14  # titles/links only exist to avoid repeats: kept for the latest editions only
 STATE_ID = "morning-newspaper-state"
 STATE_PAT = r'<script type="application/json" id="morning-newspaper-state">(.*?)</script>'
+
+
+class _Tee:
+    """Everything printed also goes to WORK/run.log, written by the script itself: a debug report can
+    quote the real output later, and the model spends no tokens on it (it never reads the log)."""
+
+    def __init__(self, out, log):
+        self.out, self.log = out, log
+
+    def write(self, txt):
+        self.out.write(txt)
+        try:
+            self.log.write(txt)
+        except (OSError, ValueError):
+            pass
+        return len(txt)
+
+    def flush(self):
+        self.out.flush()
+        try:
+            self.log.flush()
+        except (OSError, ValueError):
+            pass
+
+
+def start_log(work, script):
+    """Appends this run's command, time and output to WORK/run.log. Never blocks the edition."""
+    try:
+        os.makedirs(work, exist_ok=True)
+        log = open(os.path.join(work, "run.log"), "a", encoding="utf-8", buffering=1)
+        now = dt.datetime.now(dt.timezone.utc).astimezone()
+        log.write(f"\n===== {script} · {now.isoformat(timespec='seconds')} · "
+                  f"{' '.join(sys.argv[1:])}\n")
+        sys.stdout = _Tee(sys.stdout, log)
+    except OSError:
+        pass
 
 
 def link_id(url):
@@ -300,7 +337,10 @@ def sections_html(cfg, sections, L):
 def main():
     """Any unexpected problem still ends in an ERROR line (nothing written), never a traceback."""
     try:
-        return build()
+        rc = build()
+        if isinstance(sys.stdout, _Tee):
+            print(f"[exit {rc}]")
+        return rc
     except Exception as e:  # pragma: no cover - the specific checks below should catch it first
         print(f"ERROR: could not build the edition ({type(e).__name__}: {str(e)[:160]})")
         print("Nothing was written. Fix edition.json (or the config/index) and run again.")
@@ -328,6 +368,7 @@ def build():
     ap.add_argument("--unpack-state", metavar="FILE",
                     help="write WORK/config.json and WORK/index.json from the state copied from a single page")
     a = ap.parse_args()
+    start_log(a.work, "assemble.py")
     if a.unpack_state:
         return unpack_state(a.unpack_state, a.work)
     if not (a.skill and a.config):
@@ -342,11 +383,17 @@ def build():
         cfg = json.load(f)
     with open(os.path.join(a.work, "edition.json"), encoding="utf-8") as f:
         ed = json.load(f)
-    collected = {}
     cpath = os.path.join(a.work, "collected.json")
-    if os.path.exists(cpath):
-        with open(cpath, encoding="utf-8") as f:
-            collected = json.load(f)
+    if not os.path.exists(cpath):
+        # The collection is never skipped: without it there is nothing to check the stories against
+        # (and an edition of one story found by hand looks complete when it is not).
+        print("ERROR: WORK/collected.json not found: run collect.py first (step 2). With NETWORK BLOCKED, "
+              "follow references/no-network.md and run collect.py --from-results. Then rewrite edition.json "
+              "with the printed IDs.")
+        print("Nothing was written.")
+        return 1
+    with open(cpath, encoding="utf-8") as f:
+        collected = json.load(f)
     refs = {n["id"]: n for lst in (collected.get("news") or {}).values() for n in lst}
     refs.update({h["id"]: h for h in collected.get("history") or []})
     refs.update({d["id"]: d for d in collected.get("did_you_know") or [] if isinstance(d, dict) and "id" in d})
@@ -478,6 +525,17 @@ def build():
         if twin in printed_refs:
             warnings.append(f"{r} and {twin} may tell the same fact (≈{twin}): keep only one unless they differ")
     total = (1 if h else 0) + sum(len(v) for v in sections.values())
+    if total and collected.get("network_blocked") and not collected.get("from_results"):
+        # The collection said NETWORK BLOCKED and the no-network searches were skipped: stories found
+        # one by one leave every other section empty while the edition looks finished.
+        errors.append("the collection printed NETWORK BLOCKED: follow references/no-network.md (one search per "
+                      "section, all results in WORK/results.json, collect.py --from-results) before writing stories")
+    h_sid = next((sid for sid, lst in (collected.get("news") or {}).items()
+                  if h.get("ref") and any(n["id"] == h["ref"] for n in lst)), None)
+    if not h_sid and h.get("section"):
+        h_sid = next((sid for sid, t in titles.items() if t == h["section"]), None)
+    filled = [sid for sid in section_ids if sections.get(sid) or sid == h_sid]
+    empty = [sid for sid in section_ids if sid not in filled]
     limits = cfg.get("total_news") or {}
     if total > limits.get("max", 10):
         errors.append(f"{total} stories: the maximum is {limits.get('max', 10)}")
@@ -689,6 +747,8 @@ def build():
               f"{'SHARE COPY' if a.share else 'STANDALONE'}")
         print("HEADLINE:", h.get("title", "") or "(none: no story today; the summary adds a Missing line for the news)")
         print(f"NOT FOR THE NEWSSTAND: send this file to the reader: {os.path.abspath(path)}")
+        coverage(total, filled, empty, titles)
+        next_steps(False, standalone=True)
         return 0
 
     stories = ([h] if h else []) + [n for v in sections.values() for n in v]
@@ -731,6 +791,7 @@ def build():
         print("HEADLINE:", h.get("title", "") or "(none: no story today; the summary adds a Missing line for the news)")
         print(f"ARTIFACT TITLE: {news_name}")
         print(f"PUBLISH this one file as the artifact's page (from disk, never pasted): {os.path.abspath(path)}")
+        coverage(total, filled, empty, titles)
         next_steps(True)
         return 0
 
@@ -767,18 +828,33 @@ def build():
     print("PUBLISH (as -> path; index.html is the newsstand's main page, never an edition):")
     for p in publish:
         print(f"  {p} -> {os.path.abspath(os.path.join(dest, p))}")
+    coverage(total, filled, empty, titles)
     next_steps(False)
     return 0
 
 
-def next_steps(single):
+def coverage(total, filled, empty, titles):
+    """What the edition really carries: the summary (step 8) is written from this line, never from the plan."""
+    print(f"COVERAGE: {total} stor{'y' if total == 1 else 'ies'} · with stories: "
+          f"{', '.join(titles[s] for s in filled) or 'none'} · empty: {', '.join(titles[s] for s in empty) or 'none'}")
+    if empty:
+        print("  The summary's Missing line names the empty sections (or says no news was confirmed, when all are). "
+              "Never describe the edition as covering them.")
+
+
+def next_steps(single, standalone=False):
     """What is left after the files are written, printed where the model reads it."""
     print("NEXT (mandatory, in order):")
-    print("  6. Publish exactly the file" + ("" if single else "s") + " above, nothing else.")
+    if standalone:
+        print("  6. Nothing to publish: send the file above to the reader, with one sentence on why there is "
+              "no newsstand (references/modes.md).")
+    else:
+        print("  6. Publish exactly the file" + ("" if single else "s") + " above, nothing else.")
     print("  7. Check every sentence against what backs it (collected title and summary, a page you opened, "
           "the Wikipedia text); remove what is not there, then rerun and republish if anything changed.")
     print("  8. Reply with the edition summary (SKILL.md step 8): at most 4 lines, in the reader's language, "
-          "no process, sources, network or script details.")
+          "built from the OK and COVERAGE lines above (never from the plan), no process, sources, network "
+          "or script details.")
 
 
 if __name__ == "__main__":
