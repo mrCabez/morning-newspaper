@@ -751,7 +751,7 @@ def test_blocked_network_is_not_printed_as_nothing_new(collect_module, offline, 
     assert "(nothing new)" not in out and "(not collected: no source answered)" in out
 
 
-# ---------------------------------------------------------------- v1.7.1: run log
+# ---------------------------------------------------------------- v1.8.0: run log
 
 def test_collect_writes_its_output_to_run_log(collect_module, offline, monkeypatch, tmp_path, capsys, config):
     results = {"news": [{"section": "tech", "query": "q", "title": "Browser patches a flaw already under attack",

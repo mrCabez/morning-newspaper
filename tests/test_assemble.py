@@ -748,7 +748,7 @@ def test_a_day_with_no_story_still_gets_its_edition(assembler):
     assert assembler.new_index()["editions"][0]["headline"] == "No confirmed news today"
 
 
-# ---------------------------------------------------------------- collection, coverage and run log (v1.7.1)
+# ---------------------------------------------------------------- collection, coverage and run log (v1.8.0)
 
 def test_refuses_without_collected_json(assembler):
     """An edition built without the collection cannot be checked against anything."""
