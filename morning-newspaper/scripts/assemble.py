@@ -13,13 +13,19 @@ Output, if every check passes:
 and the list of files to publish. With --standalone (a test or a copy that is not going to the
 newsstand) or --share (a copy to show other people) it writes only WORK/standalone/YYYY-MM-DD.html:
 no newsstand button, and the index is left untouched.
+With --single-page (the publishing tool takes one HTML page per artifact, so there can be no
+newsstand) it writes WORK/single/index.html: today's edition with the reader's state (config and a
+compact index) embedded in a <script type="application/json" id="morning-newspaper-state"> block
+near the top, so the next run can recover it with --unpack-state.
 If anything fails it prints the errors, writes nothing and exits 1.
 
 Standard library only. No network access.
 Usage:
   python3 assemble.py --skill SKILL_DIR --config config.json --work WORK_DIR [--index index.json]
-                      [--with-config] [--with-page] [--sample] [--standalone | --share]
+                      [--with-config] [--with-page] [--sample] [--standalone | --share | --single-page]
+  python3 assemble.py --unpack-state STATE_FILE --work WORK_DIR
 """
+import hashlib
 import argparse
 import datetime as dt
 import html
@@ -64,6 +70,55 @@ LEGACY_EXTRAS = {"historia": "history", "voce_sabia": "did_you_know"}
 LEGACY_TYPES = {"fim de semana": "weekend", "manhã": "morning", "manha": "morning", "matutina": "morning",
                 "amostra": "sample"}
 DEDUP_EDITIONS = 14  # titles/links only exist to avoid repeats: kept for the latest editions only
+STATE_ID = "morning-newspaper-state"
+STATE_PAT = r'<script type="application/json" id="morning-newspaper-state">(.*?)</script>'
+
+
+def link_id(url):
+    """Short fingerprint of a link: the single-page state keeps these instead of long URLs."""
+    return hashlib.sha1(str(url).encode("utf-8")).hexdigest()[:12]
+
+
+def state_block(cfg, index):
+    """The reader's state as one line of JSON for the single page. '<' is escaped so nothing in it
+    can close the script tag; json.loads reads it back unchanged."""
+    editions = []
+    for e in index["editions"]:
+        e = {k: v for k, v in e.items() if k != "file"}
+        if "links" in e:
+            e["link_ids"] = sorted({link_id(u) for u in e.pop("links") if u} | set(e.get("link_ids") or []))
+        editions.append(e)
+    state = {"format": 1, "config": cfg,
+             "index": {"newspaper": index["newspaper"], "founded": index["founded"], "editions": editions}}
+    data = json.dumps(state, ensure_ascii=False, separators=(",", ":")).replace("<", "\\u003c")
+    return f'<script type="application/json" id="{STATE_ID}">{data}</script>'
+
+
+def unpack_state(path, work):
+    """--unpack-state: reads the state copied from the single page (the JSON alone, or the page
+    with its state block) and writes WORK/config.json and WORK/index.json."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            raw = f.read()
+        m = re.search(STATE_PAT, raw, re.S)
+        state = json.loads(m.group(1) if m else raw)
+        cfg, index = state["config"], state["index"]
+        if not isinstance(cfg, dict) or not isinstance(index.get("editions"), list):
+            raise ValueError("config or index has the wrong shape")
+    except (OSError, ValueError, KeyError, TypeError, AttributeError) as e:
+        print(f"ERROR: could not read the state ({type(e).__name__}: {str(e)[:120]}). Copy the whole JSON "
+              f"inside <script id=\"{STATE_ID}\"> from the page, exactly as it is, and run again.")
+        return 1
+    os.makedirs(work, exist_ok=True)
+    with open(os.path.join(work, "config.json"), "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=1)
+    with open(os.path.join(work, "index.json"), "w", encoding="utf-8") as f:
+        json.dump(index, f, ensure_ascii=False, indent=1)
+    last = (sorted(index["editions"], key=lambda e: str(e.get("date") or ""), reverse=True) or [{}])[0]
+    print(f"STATE: wrote config.json and index.json to {os.path.abspath(work)} "
+          f"(last edition: No. {last.get('number', '-')}, {last.get('date', '-')}; "
+          f"{len(index['editions'])} editions)")
+    return 0
 
 
 def _renamed(d, table):
@@ -254,8 +309,8 @@ def main():
 
 def build():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--skill", required=True)
-    ap.add_argument("--config", required=True)
+    ap.add_argument("--skill")
+    ap.add_argument("--config")
     ap.add_argument("--work", required=True)
     ap.add_argument("--index", help="current index.json of the newsstand; omit if it does not exist yet")
     ap.add_argument("--with-config", action="store_true", help="also write config.json into the output to publish")
@@ -266,8 +321,19 @@ def build():
                     help="a single page that is not added to the newsstand (test or 'don't publish')")
     ap.add_argument("--share", action="store_true",
                     help="like --standalone, for showing other people: says on the page what was left out")
+    ap.add_argument("--single-page", action="store_true",
+                    help="one page that replaces the previous one in the same artifact, carrying the reader's state")
+    ap.add_argument("--unpack-state", metavar="FILE",
+                    help="write WORK/config.json and WORK/index.json from the state copied from a single page")
     a = ap.parse_args()
-    standalone = a.standalone or a.share
+    if a.unpack_state:
+        return unpack_state(a.unpack_state, a.work)
+    if not (a.skill and a.config):
+        ap.error("--skill and --config are required to build an edition")
+    if sum(map(bool, (a.standalone, a.share, a.single_page))) > 1:
+        ap.error("choose only one of --standalone, --share and --single-page")
+    single = a.single_page
+    standalone = a.standalone or a.share or single
 
     errors, warnings = [], []
     with open(a.config, encoding="utf-8") as f:
@@ -444,8 +510,12 @@ def build():
     weather = collected.get("weather") if ed.get("weather", True) else None
     if isinstance(ed.get("weather"), dict):
         weather = ed["weather"]
-    if weather and not str(weather.get("url", "")).startswith("https://"):
-        errors.append("weather: source without https link")
+    # The link is optional: a forecast from the app's own weather tool has no page. When given, it
+    # must be https; "source" (optional) names where the numbers came from when there is no link.
+    weather_url = str((weather or {}).get("url") or "")
+    if weather and weather_url and not weather_url.startswith("https://"):
+        errors.append(f"weather.url: not an https link ({weather_url[:60]}); leave \"url\" out when the "
+                      "forecast has no page")
     if weather and ed.get("weather_condition"):
         weather = dict(weather, condition=ed["weather_condition"])
 
@@ -516,7 +586,10 @@ def build():
         "SVG_WEATHER": svg(SVG_WEATHER.get((weather or {}).get("icon"), SVG_WEATHER["sun-cloud"]), 44),
         "WEATHER_TITLE": L["weather_in"].format(city=(cfg.get("city") or {}).get("name", "")),
         "MAX": (weather or {}).get("max", ""), "MIN": (weather or {}).get("min", ""),
-        "CONDITION": (weather or {}).get("condition", ""), "URL_WEATHER": (weather or {}).get("url", ""),
+        "CONDITION": (weather or {}).get("condition", ""), "URL_WEATHER": weather_url,
+        "url_weather": bool(weather_url),
+        "weather_source": bool(not weather_url and (weather or {}).get("source")),
+        "WEATHER_SOURCE": (weather or {}).get("source", ""),
         "headline": bool(h), "HEADLINE_SECTION": h_section, "HEADLINE_TITLE": h.get("title", ""),
         "HEADLINE_DECK": h.get("deck", ""),
         "SVG_HEADLINE": svg(SVG_ICON.get(h.get("icon"), SVG_ICON["newspaper"]), 56),
@@ -557,9 +630,12 @@ def build():
     body = page.split("<body>", 1)[-1]
     if re.search(r"\{\{|<!--/?(IF|EACH):", body):
         errors.append("a template marker was left in the page")
-    for href in re.findall(r'href="([^"]*)"', page):
-        if not (href.startswith("https://") or (href == "../index.html" and not standalone)):
-            errors.append(f"invalid link in page: {href[:60]}")
+    # Field checks above already name the field behind a bad link; this one only catches the rest,
+    # so one problem never prints two errors.
+    if not errors:
+        for href in re.findall(r'href="([^"]*)"', page):
+            if not (href.startswith("https://") or (href == "../index.html" and not standalone)):
+                errors.append(f"invalid link in page: {href[:60] or '(empty)'} (a story or box without an https link)")
     for tag in ("section", "div", "article", "p"):
         if len(re.findall(rf"<{tag}[\s>]", page)) != page.count(f"</{tag}>"):
             errors.append(f"unbalanced <{tag}> tags in page")
@@ -572,7 +648,7 @@ def build():
         print("Nothing was written. Fix edition.json and run again.")
         return 1
 
-    if standalone:
+    if standalone and not single:
         # Nothing goes to the newsstand: no index is written, so a copy can never replace the
         # morning entry by mistake if someone publishes WORK/archive later.
         out_dir = os.path.join(a.work, "standalone")
@@ -605,8 +681,27 @@ def build():
            or day.isoformat(), "labels": archive_labels, "editions": [entry] + previous}
     new["editions"].sort(key=d_of, reverse=True)
     for e in new["editions"][DEDUP_EDITIONS:]:
-        for k in ("titles", "source_titles", "links"):
+        for k in ("titles", "source_titles", "links", "link_ids"):
             e.pop(k, None)
+
+    if single:
+        # One page per artifact: today's edition replaces yesterday's, and the state block keeps
+        # config, numbering and the repeat checks alive between runs. The page title is the
+        # newspaper's name, so the artifact keeps one stable name.
+        page = re.sub(r"<title>.*?</title>", f"<title>{esc(news_name)}</title>", page, count=1)
+        cfg_state = dict(cfg)
+        page = page.replace('<meta charset="utf-8">', '<meta charset="utf-8">\n' + state_block(cfg_state, new), 1)
+        out_dir = os.path.join(a.work, "single")
+        os.makedirs(out_dir, exist_ok=True)
+        path = os.path.join(out_dir, "index.html")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(page)
+        print(f"OK: {L['issue_label']} {number:03d} · {day.isoformat()} · {total} stories · SINGLE PAGE"
+              f"{' · REISSUE' if existing else ''}")
+        print("HEADLINE:", h.get("title", ""))
+        print(f"ARTIFACT TITLE: {news_name}")
+        print(f"PUBLISH this one file as the artifact's page (from disk, never pasted): {os.path.abspath(path)}")
+        return 0
 
     stand_title = f"{news_name} · {L['archive_title']}"
     dest = os.path.join(a.work, "archive")

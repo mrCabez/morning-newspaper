@@ -552,3 +552,91 @@ def test_other_month_finds_the_year_after_a_connector(collect_module):
         assert collect_module.other_month("Dati di ottobre del 2025", dt.date(2026, 11, 13)) is True
     finally:
         collect_module.set_reader_months({})
+
+
+# ---------------------------------------------------------------- v1.5.0: --from-results (no network)
+
+def run_from_results(collect_module, offline, monkeypatch, tmp_path, capsys, config, results, index=None, date="2026-11-13"):
+    (tmp_path / "config.json").write_text(json.dumps(config), encoding="utf-8")
+    (tmp_path / "results.json").write_text(json.dumps(results), encoding="utf-8")
+    argv = ["collect.py", "--config", str(tmp_path / "config.json"), "--work", str(tmp_path / "w"),
+            "--date", date, "--from-results", str(tmp_path / "results.json")]
+    if index is not None:
+        (tmp_path / "index.json").write_text(json.dumps(index), encoding="utf-8")
+        argv += ["--index", str(tmp_path / "index.json")]
+    monkeypatch.setattr(sys, "argv", argv)
+    code = collect_module.main()
+    out = capsys.readouterr().out
+    data = json.loads((tmp_path / "w" / "collected.json").read_text(encoding="utf-8")) if code == 0 else None
+    return code, out, data
+
+
+def test_from_results_filters_like_a_normal_collection(collect_module, offline, monkeypatch, tmp_path, capsys, config):
+    today = dt.datetime.now(collect_module.tz_of(config)).date()
+    old = (today - dt.timedelta(days=30)).isoformat()
+    config["avoid"] = ["election"]
+    results = {"news": [
+        {"section": "tech", "query": "q1", "title": "Browser patches a flaw already under attack",
+         "url": "https://a.example/1", "outlet": "A", "date": today.isoformat()},
+        {"section": "tech", "query": "q2", "title": "Open model tops a coding benchmark today",
+         "url": "https://b.example/2", "outlet": "B"},
+        {"section": "tech", "query": "q2", "title": "Old story about chips and memory prices",
+         "url": "https://c.example/3", "outlet": "C", "date": old},
+        {"section": "tech", "query": "q1", "title": "Election software audit announced by officials",
+         "url": "https://d.example/4", "outlet": "D", "date": today.isoformat()},
+        {"section": "sports", "title": "Not a section", "url": "https://e.example/5"},
+        {"section": "tech", "title": "No link here", "url": "http:"},
+    ],
+        "weather": {"max": 28.8, "min": 19.3, "condition": "Partly sunny", "source": "app weather tool"},
+        "history": [{"year": 1889, "text": "A republic is proclaimed.", "url": "https://en.wikipedia.org/wiki/November_15"}]}
+    code, out, data = run_from_results(collect_module, offline, monkeypatch, tmp_path, capsys, config, results,
+                                       date=today.isoformat())
+    assert code == 0
+    assert "FROM WEB RESULTS" in out and "NETWORK BLOCKED" not in out
+    titles = [n["title"] for n in data["news"]["tech"]]
+    assert titles == ["Browser patches a flaw already under attack", "Open model tops a coding benchmark today"]
+    undated = data["news"]["tech"][1]
+    assert undated["flags"] == ["date?"] and undated["date"] == ""
+    assert out.count("SKIPPED:") == 2
+    assert data["weather"]["max"] == 29 and "url" not in data["weather"]
+    assert data["weather"]["source"] == "app weather tool" and data["weather"]["icon"] == "sun-cloud"
+    assert data["history"][0]["id"] == "h1" and data["history"][0]["year"] == 1889
+    assert data["from_results"] is True
+
+
+def test_from_results_skips_links_already_printed(collect_module, offline, monkeypatch, tmp_path, capsys, config):
+    """Single-page states keep link fingerprints instead of URLs; both count as already printed."""
+    today = dt.datetime.now(collect_module.tz_of(config)).date()
+    index = {"editions": [{"date": (today - dt.timedelta(days=1)).isoformat(), "number": 1,
+                           "link_ids": [collect_module.link_id("https://a.example/1")],
+                           "links": ["https://b.example/2"]}]}
+    results = {"news": [
+        {"section": "tech", "title": "Browser patches a flaw already under attack", "url": "https://a.example/1",
+         "outlet": "A", "date": today.isoformat()},
+        {"section": "tech", "title": "Open model tops a coding benchmark today", "url": "https://b.example/2",
+         "outlet": "B", "date": today.isoformat()},
+        {"section": "tech", "title": "Quantum chip startup raises funding round", "url": "https://c.example/3",
+         "outlet": "C", "date": today.isoformat()}]}
+    code, out, data = run_from_results(collect_module, offline, monkeypatch, tmp_path, capsys, config, results,
+                                       index=index, date=today.isoformat())
+    assert code == 0
+    assert [n["url"] for n in data["news"]["tech"]] == ["https://c.example/3"]
+    assert data["number"] == 2
+
+
+def test_from_results_bad_file_is_an_error(collect_module, offline, monkeypatch, tmp_path, capsys, config):
+    (tmp_path / "config.json").write_text(json.dumps(config), encoding="utf-8")
+    (tmp_path / "results.json").write_text("{oops", encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["collect.py", "--config", str(tmp_path / "config.json"), "--work",
+                                      str(tmp_path / "w"), "--from-results", str(tmp_path / "results.json")])
+    assert collect_module.main() == 1
+    assert capsys.readouterr().out.startswith("ERROR:")
+
+
+@pytest.mark.parametrize("txt, day_only", [("2026-11-14", True), ("2026-11-14T08:30:00-03:00", False),
+                                           ("Fri, 13 Nov 2026 22:00:00 GMT", False), ("", False)])
+def test_result_dates(collect_module, txt, day_only):
+    tz = dt.timezone(dt.timedelta(hours=-3))
+    when, only = collect_module.result_date(txt, tz, dt.datetime(2026, 11, 15, 12, 0, tzinfo=tz))
+    assert only is day_only
+    assert (when is None) is (txt == "")

@@ -121,3 +121,13 @@ def test_security_alerts_go_to_the_summary():
     text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
     assert '"security_alert": true' not in text
     assert "never goes in the paper" in text
+
+
+def test_mode_is_chosen_first_and_schedule_line_needs_the_tool():
+    """v1.5.0: the mode is decided in step 0, and 📅 is never offered without a scheduled-task tool."""
+    text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+    assert text.index("### 0. Choose the mode") < text.index("### 1. Find the newsstand")
+    assert "only when this session has a scheduled-task tool" in deliver_section()
+    archive = (SKILL / "references" / "archive.md").read_text(encoding="utf-8")
+    assert "## Single page" in archive and "--unpack-state" in archive
+    assert "--from-results" in text

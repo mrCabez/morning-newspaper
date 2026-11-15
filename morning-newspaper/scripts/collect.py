@@ -14,13 +14,19 @@ summary with a short ID per story (a1, b3, ...; h1... for history), which is wha
 Standard library only. Only performs read-only GET requests to the hosts listed in the config
 and to wttr.in, api.open-meteo.com and *.wikipedia.org. Only writes inside WORK.
 
+With --from-results FILE it touches no network at all: it takes the web search results the model
+gathered (when the sources are blocked, see "No network" in SKILL.md) and applies the same filters,
+ranking, flags and IDs, so the rest of the edition works exactly as after a normal collection.
+
 Usage:
   python3 collect.py --config config.json --work WORK_DIR [--index index.json] [--date YYYY-MM-DD]
+                     [--from-results results.json]
 """
 import argparse
 import concurrent.futures as cf
 import datetime as dt
 import email.utils
+import hashlib
 import html
 import json
 import os
@@ -38,7 +44,7 @@ try:
 except Exception:  # pragma: no cover
     ZoneInfo = None
 
-UA = "morning-newspaper/1.4.3 (personal newspaper; RSS reader)"
+UA = "morning-newspaper/1.5.0 (personal newspaper; RSS reader)"
 TIMEOUT = 12
 MAX_BYTES = 5_000_000
 # Stories are only compared against the latest editions: a headline from months ago must not
@@ -63,6 +69,11 @@ DYK_THEMES = [
     "history of the mouse, touchscreen or another input device", "a curiosity about databases",
     "the origin of a tech company's name", "how undersea cables or satellites carry data",
 ]
+
+
+def link_id(url):
+    """Short fingerprint of a link (same as assemble.py): single-page states keep these, not URLs."""
+    return hashlib.sha1(str(url).encode("utf-8")).hexdigest()[:12]
 
 
 def dyk_theme(cfg, day):
@@ -248,7 +259,7 @@ def past_editions(index, day):
     previous = sorted((e for e in editions if (e.get("date") or e.get("data")) != day.isoformat()),
                       key=lambda e: e.get("date") or e.get("data") or "", reverse=True)
     recent = previous[:DEDUP_EDITIONS]
-    links = {l for e in recent for l in e.get("links", [])}
+    links = {l for e in recent for l in [*(e.get("links") or []), *(e.get("link_ids") or [])]}
     titles = [t for e in recent
               for t in [e.get("headline") or e.get("manchete") or "", *(e.get("titles") or e.get("titulos") or []),
                         *(e.get("source_titles") or [])] if t]
@@ -367,7 +378,16 @@ def collect_news(cfg, window_h, now, used_links, used_titles, tz):
                 results[fut[f]] = f.result()
             except Exception as e:
                 failures.append(f"{sid}: {urllib.parse.urlparse(u).netloc} ({type(e).__name__} {getattr(e, 'code', '')})".replace(" )", ")"))
+    return rank_news(cfg, [sid for sid, _ in tasks], results, window_h, now, used_links, used_titles, tz), failures
+
+
+def rank_news(cfg, task_sections, results, window_h, now, used_links, used_titles, tz):
+    """Filters and ranks candidates. results[i] holds the stories of search/feed i, which belongs to
+    section task_sections[i]. A story whose date is unknown (only possible with --from-results) is
+    kept after the dated ones and flagged "date?" so the model confirms it."""
     cutoff = now - dt.timedelta(hours=window_h)
+    tasks = [(sid, None) for sid in task_sections]
+    undated_last = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
     pre = prefixes(cfg["sections"])
     out = {}
     # Groups of stories that may tell the same fact, across sections. A story joins a group only if
@@ -383,10 +403,11 @@ def collect_news(cfg, window_h, now, used_links, used_titles, tz):
             if task_sid != sid:
                 continue
             ok = [it for it in results[i]
-                  if it["date"] is not None and it["date"] >= cutoff and it["url"] not in used_links
+                  if (it["date"] is None and it.get("undated_ok") or it["date"] is not None and it["date"] >= cutoff)
+                  and it["url"] not in used_links and link_id(it["url"]) not in used_links
                   and not avoided(f"{it['title']} {it['summary']}", avoid)
                   and not any(same_story(it["title"], t) for t in used_titles)]
-            queues.append(sorted(ok, key=lambda x: x["date"], reverse=True))
+            queues.append(sorted(ok, key=lambda x: x["date"] or undated_last, reverse=True))
         # Take turns: the newest story of each search, then the second of each, and so on.
         kept, limit, depth = [], sec.get("max_candidates", 10), 0
         while len(kept) < limit and any(depth < len(q) for q in queues):
@@ -396,7 +417,7 @@ def collect_news(cfg, window_h, now, used_links, used_titles, tz):
                     if not any(it["url"] == k["url"] or same_story(it["title"], k["title"]) for k in kept):
                         kept.append(it)
             depth += 1
-        kept.sort(key=lambda x: x["date"], reverse=True)
+        kept.sort(key=lambda x: x["date"] or undated_last, reverse=True)
         # Local sections of a small town fill up with the region: the stories that name the city
         # itself come first, so a busy neighbouring town cannot push them out of sight.
         city = (cfg.get("city") or {}).get("name", "")
@@ -404,9 +425,11 @@ def collect_news(cfg, window_h, now, used_links, used_titles, tz):
             kept.sort(key=lambda x: not names_city(x["title"], city))
         items = []
         for i, it in enumerate(kept, 1):
+            when = ("" if it["date"] is None else it["date"].astimezone(tz).strftime("%Y-%m-%d")
+                    if it.get("day_only") else it["date"].astimezone(tz).strftime("%Y-%m-%d %H:%M"))
             n = {"id": f"{pre[sid]}{i}", "title": it["title"], "outlet": it["outlet"], "url": it["url"],
-                 "date": it["date"].astimezone(tz).strftime("%Y-%m-%d %H:%M"), "summary": it["summary"]}
-            flags = []
+                 "date": when, "summary": it["summary"]}
+            flags = [] if it["date"] is not None else ["date?"]
             group = next((g for g in groups if all(related(it["title"], m) for m in g["titles"])), None)
             if group:
                 group["titles"].append(it["title"])
@@ -424,7 +447,81 @@ def collect_news(cfg, window_h, now, used_links, used_titles, tz):
                 n["flags"] = flags
             items.append(n)
         out[sid] = items
-    return out, failures
+    return out
+
+
+# ---------------------------------------------------------------- results gathered by the model
+
+def result_date(txt, tz, now):
+    """A date given with a web result: "2026-11-14" (the whole day counts), an ISO date-time or an
+    RFC 822 date. Returns (datetime or None, day_only)."""
+    txt = str(txt or "").strip()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", txt):
+        try:
+            d = dt.date.fromisoformat(txt)
+        except ValueError:
+            return None, False
+        return min(dt.datetime(d.year, d.month, d.day, 23, 59, tzinfo=tz), now), True
+    when = _date(txt)
+    if when is not None and txt and "T" in txt and not re.search(r"(Z|[+-]\d\d:?\d\d)$", txt):
+        when = when.replace(tzinfo=tz)  # a local time with no offset is the reader's
+    return when, False
+
+
+def from_results(path, cfg, tz, now):
+    """Reads the results file (format in references/edition-format.md, "No network") and returns
+    (task_sections, results, weather, history events, problems)."""
+    with open(path, encoding="utf-8") as f:
+        data = json.load(f)
+    if isinstance(data, list):
+        data = {"news": data}
+    section_ids = [s["id"] for s in cfg["sections"]]
+    problems, order, queues = [], [], {}
+    for i, r in enumerate(data.get("news") or []):
+        if not isinstance(r, dict):
+            problems.append(f"news[{i}]: not an object")
+            continue
+        sid = r.get("section")
+        if sid not in section_ids:
+            problems.append(f"news[{i}]: section {sid!r} is not in config.json")
+            continue
+        url = re.sub(r"^http:(?=//)", "https:", str(r.get("url") or "").strip())
+        outlet = str(r.get("outlet") or "").strip() or urllib.parse.urlparse(url).netloc.replace("www.", "")
+        title = re.sub(r"\s+[-–—|]\s*$", "", clean(r.get("title") or "", 300)).strip()
+        if outlet and title.endswith(" - " + outlet):
+            title = title[: -len(" - " + outlet)]
+        if not url.startswith("https://") or junk_title(title, outlet):
+            problems.append(f"news[{i}]: needs a title and an https url")
+            continue
+        when, day_only = result_date(r.get("date"), tz, now)
+        summary = clean(r.get("summary") or "", 160)
+        if summary and same_story(summary, title):
+            summary = ""
+        key = (sid, str(r.get("query") or ""))
+        if key not in queues:
+            queues[key] = []
+            order.append(key)
+        queues[key].append({"title": title, "outlet": outlet, "url": url, "date": when, "day_only": day_only,
+                            "summary": summary, "undated_ok": True})
+    weather = data.get("weather")
+    if isinstance(weather, dict) and isinstance(weather.get("max"), (int, float)) \
+            and isinstance(weather.get("min"), (int, float)):
+        w = {"max": round(weather["max"]), "min": round(weather["min"]),
+             "condition": str(weather.get("condition") or "").strip(),
+             "rain_chance": weather.get("rain_chance"),
+             "icon": weather.get("icon") or icon_from_text(str(weather.get("condition") or "")),
+             "condition_lang": (cfg.get("language") or "en").split("-")[0]}
+        if str(weather.get("url") or "").startswith("https://"):
+            w["url"] = weather["url"]
+        if weather.get("source"):
+            w["source"] = str(weather["source"])[:60]
+        weather = w
+    else:
+        if weather:
+            problems.append("weather: needs numeric max and min")
+        weather = None
+    events = [h for h in data.get("history") or [] if isinstance(h, dict) and h.get("text")]
+    return [k[0] for k in order], [queues[k] for k in order], weather, events, problems
 
 
 # ---------------------------------------------------------------- weather
@@ -509,20 +606,36 @@ def collect_history(day, cfg, used):
     lang = re.sub(r"[^a-z]", "", (cfg.get("wikipedia_lang") or (cfg.get("language") or "en").split("-")[0]).lower()) or "en"
     url = f"https://{lang}.wikipedia.org/api/rest_v1/feed/onthisday/events/{day:%m}/{day:%d}"
     d = json.loads(fetch(url))
+    events = []
+    for ev in d.get("events", []):
+        page = (ev.get("pages") or [{}])[0]
+        events.append({"year": ev.get("year"), "text": ev.get("text", ""),
+                       "url": ((page.get("content_urls") or {}).get("desktop") or {}).get("page", "")})
+    return rank_history(events, cfg, used)
+
+
+def rank_history(events, cfg, used):
+    """"On this day" candidates (h1, h2…): the reader's avoid list and used extras removed, the
+    ones matching history_keywords first. Events: {"year", "text", "url"}."""
     pref = [" ".join(words(p)) for p in cfg.get("history_keywords", [])]
     used_n = [" ".join(words(u)) for u in used if u]
     avoid = phrases(cfg.get("avoid"))  # nothing is filtered unless the reader asked for it
     cands = []
-    for ev in d.get("events", []):
+    for ev in events:
         txt = clean(ev.get("text", ""), 260)
         n = " ".join(words(txt))
         if not txt or avoided(txt, avoid):
             continue
         if any(u and (n in u or u in n or same_story(n, u)) for u in used_n):
             continue
-        page = (ev.get("pages") or [{}])[0]
-        link = ((page.get("content_urls") or {}).get("desktop") or {}).get("page", "")
-        c = {"year": ev.get("year"), "text": txt, "url": link, "score": sum(1 for p in pref if p and p in n)}
+        link = str(ev.get("url") or "")
+        if not link.startswith("https://"):
+            link = ""
+        try:
+            year = int(ev.get("year"))
+        except (TypeError, ValueError):
+            year = None
+        c = {"year": year, "text": txt, "url": link, "score": sum(1 for p in pref if p and p in n)}
         if re.search(r"\d{7,}", txt):
             c["check_numbers"] = True  # a flattened exponent or formula (2^1398269−1 → "21398269−1")
         cands.append(c)
@@ -538,6 +651,8 @@ def main():
     ap.add_argument("--work", required=True, help="working folder for this edition")
     ap.add_argument("--index", help="current editions/index.json from the newsstand, if any")
     ap.add_argument("--date", help="YYYY-MM-DD (default: today in the reader's timezone)")
+    ap.add_argument("--from-results", metavar="FILE",
+                    help="no network: filter and rank the web search results in FILE instead of fetching")
     a = ap.parse_args()
 
     # Check the working folder before spending a minute on the network.
@@ -577,33 +692,49 @@ def main():
     reissue = next((e.get("number") or e.get("numero") for e in editions
                     if (e.get("date") or e.get("data")) == day.isoformat()), None)
 
-    news, failures = collect_news(cfg, window, now, used_links, used_titles, tz)
-    weather, wf = collect_weather(cfg)
-    failures += wf
-    try:
-        history = collect_history(day, cfg, used_history)
-    except Exception as e:
-        history = []
-        failures.append(f"history: wikipedia ({type(e).__name__} {getattr(e, 'code', '')})".replace(" )", ")"))
+    problems = []
+    if a.from_results:
+        try:
+            task_sections, results, weather, events, problems = from_results(a.from_results, cfg, tz, now)
+        except (OSError, ValueError) as e:
+            print(f"ERROR: could not read {a.from_results} ({type(e).__name__}: {str(e)[:120]}). "
+                  "Fix the results file (format in references/edition-format.md) and run again.")
+            return 1
+        news = rank_news(cfg, task_sections, results, window, now, used_links, used_titles, tz)
+        history = rank_history(events, cfg, used_history)
+        failures = []
+    else:
+        news, failures = collect_news(cfg, window, now, used_links, used_titles, tz)
+        weather, wf = collect_weather(cfg)
+        failures += wf
+        try:
+            history = collect_history(day, cfg, used_history)
+        except Exception as e:
+            history = []
+            failures.append(f"history: wikipedia ({type(e).__name__} {getattr(e, 'code', '')})".replace(" )", ")"))
 
     # Nothing at all could be reached (Claude's network access is off or limited): say it in one
     # line so the model switches to the no-network mode instead of reading a dozen failures.
-    blocked = bool(failures) and not any(news.values()) and weather is None and not history
+    blocked = not a.from_results and bool(failures) and not any(news.values()) and weather is None and not history
     out = {"date": day.isoformat(), "number": reissue or number, "reissue": bool(reissue), "weekend": weekend,
            "window_hours": window, "weather": weather, "news": news, "history": history,
            "did_you_know_theme": dyk_theme(cfg, day),
            "did_you_know_used": [s for s in used_didyouknow if s][:30], "failures": failures,
-           "network_blocked": blocked,
+           "network_blocked": blocked, "from_results": bool(a.from_results),
            "generated_at": now.isoformat(timespec="minutes")}
     with open(os.path.join(a.work, "collected.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
 
     # Compact summary for the model (no long URLs: assemble.py resolves them by ID)
     print(f"# {day.isoformat()} ({day.strftime('%A')}) · issue {out['number']}{' (reissue)' if reissue else ''}"
-          f"{' · WEEKEND' if weekend else ''} · window {window}h · language {cfg.get('language', 'en')}")
+          f"{' · WEEKEND' if weekend else ''} · window {window}h · language {cfg.get('language', 'en')}"
+          f"{' · FROM WEB RESULTS' if a.from_results else ''}")
+    for p in problems:
+        print("SKIPPED:", p)
     if weather:
+        rain = f" · rain {weather['rain_chance']}%" if weather.get("rain_chance") is not None else ""
         print(f"WEATHER: {weather['max']}°/{weather['min']}° {weather['condition']} [{weather['condition_lang']}]"
-              f" · rain {weather['rain_chance']}% · icon {weather['icon']}")
+              f"{rain} · icon {weather['icon']}")
     elif not (cfg.get("city") or {}).get("name"):
         print("WEATHER: no city configured (leave the weather out)")
     else:
@@ -612,11 +743,12 @@ def main():
         print("FLAGS: ≈a1 = maybe the same fact as a1 (keep one) · old month? = the title names another"
               " month (likely old news) · recurring? = a scheduled decision or figure (rates, inflation…):"
               " the date shown may be a republication, confirm the event date before using it"
-              " · city = names the reader's city")
+              " · city = names the reader's city · date? = no date was given: confirm it is inside the window"
+              " before using it")
     for sec in cfg["sections"]:
         print(f"\n[{sec['id']}] {sec['title']}")
         for n in news.get(sec["id"], []):
-            line = f"{n['id']} | {n['date'][5:]} | {n['outlet']} | {n['title']}"
+            line = f"{n['id']} | {n['date'][5:] or '?'} | {n['outlet']} | {n['title']}"
             if n["summary"]:
                 line += f" — {n['summary']}"
             if n.get("flags"):

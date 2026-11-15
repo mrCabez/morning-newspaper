@@ -30,7 +30,7 @@ Gathering news, weather and "On this day", building the HTML, updating the newss
 | `references/sample.md` | Only in a scheduled run that finds no config (sample edition) |
 | `references/writing.md` | Step 4, before writing |
 | `references/edition-format.md` | Step 4, the JSON format |
-| `references/archive.md` | Steps 1 and 6 (finding and publishing to the newsstand) |
+| `references/archive.md` | Steps 1 and 6 (finding and publishing to the newsstand or the single page) |
 | `references/extras.md` | Only if "On this day" came back empty, and for "Did you know?" |
 | `references/permissions.md` | Only if the reader asks about approvals or a scheduled run gets stuck |
 | `references/config.example.json` | Only during setup, as the model for config.json |
@@ -38,16 +38,18 @@ Gathering news, weather and "On this day", building the HTML, updating the newss
 
 ## What the skill needs, and what happens without it
 
-Check which tools this session has before step 1. Only the shell, web search and a folder the scripts can write to are required; everything else degrades on its own:
+Check which tools this session has in step 0. Only the shell, web search and a folder the scripts can write to are required; everything else degrades on its own:
 
 | Missing tool | What happens |
 | --- | --- |
 | Artifact tools (list, read, publish) | **Only the newspaper**, no newsstand (see "Only the newspaper" below). Never publish anywhere public to make up for it. |
-| Google Calendar | The agenda box stays and says that Google Calendar is not connected and that connecting it syncs the agenda. Connected but failing twice: the box says it could not be read, and why. |
+| Publishing several files to one artifact | **Single page** (`references/archive.md`): each edition replaces the previous one in the same private page, which carries the reader's settings and recent stories, so nothing is lost between runs. |
+| Shell network access to the sources | The collection prints `NETWORK BLOCKED` ("No network" in step 2). Some apps let the shell reach only a list of hosts; the script needs `news.google.com`, `wttr.in`, `api.open-meteo.com`, `<lang>.wikipedia.org` and the hosts of any `feeds`. |
+| Google Calendar | Use the phone's or the app's own calendar tool if the session has one (same listing, today and tomorrow). With neither, the agenda box stays and says that Google Calendar is not connected and that connecting it syncs the agenda. Connected but failing twice: the box says it could not be read, and why. |
 | Gmail | The classifieds box stays and says that Gmail is not connected (or, if it failed twice, that it could not be read, and why). |
 | Connector registry | In setup, name the missing connection; there is no button to show. |
 | Multiple-choice question tool | Setup asks in one numbered message (`references/setup.md`). |
-| Scheduled-task tool | No daily schedule: say so in one line if the reader asks for one, and that they can ask for the paper whenever they like. |
+| Scheduled-task tool | No daily schedule: say so in one line if the reader asks for one, and that they can ask for the paper whenever they like. Never offer "schedule my newspaper" in this session. |
 | Playwright with Chromium | No screenshot check. Install nothing. |
 
 ## Scheduling
@@ -63,9 +65,19 @@ When the reader asks for a daily schedule, or chose a delivery time during setup
 
 Say in one line that the edition takes a few minutes. In a scheduled run nobody is watching: ask nothing, decide and go on.
 
-Working folder: `newspaper/YYYY-MM-DD/` inside the session's current working folder (`pwd`), dated in the reader's timezone (WORK below). Skill folder: SKILL. Never a folder elsewhere such as `~/newspaper/`: the publishing tool only takes files from the working folder or the session's temporary folder.
+Working folder: `newspaper/YYYY-MM-DD/` inside the session's current working folder (`pwd`), dated in the reader's timezone (WORK below). Skill folder: SKILL. Never a folder elsewhere such as `~/newspaper/`: the publishing tool only takes files from the working folder or the session's temporary folder. If the publishing tool names the one folder it reads files from (e.g. `/mnt/user-data/outputs/`), put `newspaper/YYYY-MM-DD/` inside that folder instead.
 
 If that folder cannot be created (read-only), use the session's temporary folder (`mktemp -d`) as WORK. If no folder can be written at all, there can be no edition: tell the reader in one sentence that the newspaper could not be printed because this session cannot save files, and stop.
+
+### 0. Choose the mode (before anything else)
+
+Look at the tools this session has, once, and decide; never discover it halfway through the edition:
+- **Where the edition goes:** the artifact tools publish several files from disk to one artifact (a list of files, patch mode) → **newsstand**. They publish only one HTML page per artifact → **single page** (`references/archive.md`, "Single page"). No artifact tools, or the reader asked for a copy or a test → **only the newspaper** (below). Not sure about several files: plan the newsstand; if publishing refuses several files, switch to the single page (`references/archive.md`).
+- **Agenda:** Google Calendar, else the phone's or app's own calendar tool, else not connected. **Email:** Gmail or not connected. **Weather:** the collection, else the app's weather tool, else one web search.
+- **Schedule:** whether a scheduled-task tool exists (it decides the 📅 line in step 8).
+- **Screenshot:** whether Playwright with Chromium is already installed (step 5).
+
+Network access is known in step 2 (`NETWORK BLOCKED`); everything else from here on follows these choices.
 
 ### Only the newspaper (no newsstand)
 
@@ -82,7 +94,7 @@ How:
 
 ### 1. Find the newsstand and the config
 
-Follow `references/archive.md` ("Finding the newsstand"). From it, save `config.json` to `WORK/config.json` and `editions/index.json` to `WORK/index.json`.
+Follow `references/archive.md` ("Finding the newsstand"). From it, save `config.json` to `WORK/config.json` and `editions/index.json` to `WORK/index.json`. In the single-page mode, follow "Single page" there instead: the page's state gives the same two files.
 - **No artifact tools in this session:** there is no newsstand to find: go to "Only the newspaper" above.
 - **No newsstand or no `config.json`:**
   - Interactive session → run `references/setup.md`, then continue.
@@ -93,15 +105,16 @@ Follow `references/archive.md` ("Finding the newsstand"). From it, save `config.
 
 In the same block of calls:
 - **Script:** `python3 SKILL/scripts/collect.py --config WORK/config.json --work WORK --index WORK/index.json` (omit `--index` if there is none). It prints the date, issue number, weather, candidate stories per section with short IDs (`a1`, `b2`…), "On this day" candidates (`h1`…) and a `FAILURES` line if a source did not answer. It already applies the date window (48 h; 72 h on Mondays and weekends), drops stories used in the last 14 editions and anything matching the reader's `avoid` list, and takes turns between a section's searches so the candidates cover all of them.
-- **Agenda (Google Calendar):** one listing from today 00:00 to tomorrow 23:59, primary calendar only. Tomorrow's events only feed an optional preparation note. A successful answer with no `items` field means no events; a failed call is not a free day (see below).
+- **Agenda (Google Calendar, or the phone's or app's calendar tool):** one listing from today 00:00 to tomorrow 23:59, primary calendar only (with a phone calendar, the reader's own calendars). Tomorrow's events only feed an optional preparation note. A successful answer with no `items` field means no events; a failed call is not a free day (see below).
 - **Email (Gmail):** one search: `in:inbox newer_than:2d -category:promotions -category:social -category:updates -category:forums -from:me` (`newer_than:3d` on Saturdays, Sundays and Mondays, like the news window). Open (once each) only conversations that seem to ask the reader for something; if the reader already replied, it becomes "resolved" or is dropped. Automatic notifications are never classifieds. A security alert (new sign-in, password change) never goes in the paper: it goes in the **Attention** line of the edition summary (step 8), in scheduled runs too.
 
 **Fallback, only when something is missing:** if a section failed in the script (`FAILURES`) and came back empty, do one web search for it with the current month and year. Weather unavailable: one search for today's forecast in the reader's city; without a reliable result, `"weather": false`.
 
-**No network** (the collection printed `NETWORK BLOCKED`: Claude's network access does not reach the sources): build the edition from web searches, which still work. Tell the reader nothing about it.
-- One web search per section, using its `queries` as hints and the current month and year, for up to the section's `count` stories. Give each story `url` and `outlet` instead of `ref`.
-- Skip any story whose link is in `links`, or whose title tells the same story as a `headline`, `titles` or `source_titles` entry, in the last 14 editions of `WORK/index.json`: the script could not check repeats this time.
-- Weather: one search, as in the fallback above. "On this day": the search described in `references/extras.md`.
+**No network** (the collection printed `NETWORK BLOCKED`: Claude's network access does not reach the sources): gather with the web tools, which still work, and let the script do the filtering. Tell the reader nothing about it.
+1. One web search per section (two for the section with the most `count`), built from its `queries` plus the current month and year.
+2. Weather: the app's weather tool if there is one (it has no page: give `source`, no `url`), else one web search. "On this day": fetch the Wikipedia page for today's date in `wikipedia_lang` (`https://en.wikipedia.org/wiki/November_15`, `https://pt.wikipedia.org/wiki/15_de_novembro`, `https://es.wikipedia.org/wiki/15_de_noviembre`) and take 6–10 events from its events section.
+3. Write every result to `WORK/results.json` (format in `references/edition-format.md`, "Results file"): title, link, outlet, the date when the result shows one, a short snippet. Leave nothing out on your own: the script applies the date window, the repeat checks and the `avoid` list.
+4. Run `python3 SKILL/scripts/collect.py --config WORK/config.json --work WORK --index WORK/index.json --from-results WORK/results.json`. It prints the same summary as a normal collection, with IDs: from here on use `ref` as usual. A story flagged `date?` came without a date: open it (or search its title) to confirm it is inside the window before using it.
 
 **Extra research for the headline:** one web search with the headline's title plus the current month and year (collected links are Google News redirects that page fetchers cannot open). If every result is older than the date window, search once more in the more thorough search mode, when the tool has one. Keep the headline's `ref` and add the `url` and `outlet` of the page whose facts you used, so the printed source is the one behind the numbers (`references/edition-format.md`).
 
@@ -120,7 +133,7 @@ Use each section's `interest` and `count` from the config:
 - `city`: the title names the reader's city. In the local section prefer these over stories from neighbouring towns.
 - Drop gossip, sponsored content, small-company press releases and news from other regions that does not affect the reader.
 - Headline: the story most relevant to the reader today (affects what they do, use or decide).
-- A section with nothing good is left out. Never pad with weak or invented stories.
+- A section with nothing good is left out. Never pad with weak or invented stories. The local section first gets one more search for the region (a neighbouring town, or the region with its state) and is left out only if that brings nothing either.
 - Unverifiable claims (only small outlets, nothing confirms it) are written as "outlets report…", or left out.
 - "On this day": pick one `h` (it comes from Wikipedia, which counts as confirmation). "Did you know?": follow today's theme from the collection and `references/extras.md` (never the overused classics listed there).
 
@@ -130,7 +143,7 @@ Read `references/writing.md` and `references/edition-format.md`. Write `WORK/edi
 
 ### 5. Assemble and check
 
-`python3 SKILL/scripts/assemble.py --skill SKILL --config WORK/config.json --work WORK --index WORK/index.json` (omit `--index` the first time).
+`python3 SKILL/scripts/assemble.py --skill SKILL --config WORK/config.json --work WORK --index WORK/index.json` (omit `--index` the first time; add `--single-page` in the single-page mode).
 - `ERROR:` → nothing was written. Fix the JSON and run again.
 - `WARNING:` → consider it; it does not block.
 - `OK:` → prints the files to publish (`as` -> path).
@@ -139,7 +152,7 @@ Visual check only in an interactive session and only if Playwright with Chromium
 
 ### 6. Publish to the newsstand
 
-Follow `references/archive.md` ("Adding today's edition"). Publish exactly the files `assemble.py` listed, from disk, in patch mode. Only the newspaper: skip this step (see above).
+Follow `references/archive.md` ("Adding today's edition"). Publish exactly the files `assemble.py` listed, from disk, in patch mode. Single page: publish the one file it printed ("Single page" in `references/archive.md`). Only the newspaper: skip this step (see above).
 
 ### 7. Final check (what the script cannot see)
 
@@ -152,6 +165,7 @@ Follow `references/archive.md` ("Adding today's edition"). Publish exactly the f
 ### 8. Deliver
 
 - First run (just after setup): the summary described at the end of `references/setup.md`.
+- Single page, first edition: add one sentence saying there is no newsstand because this app keeps one page per artifact, so each edition replaces the previous one in the same private page, where the settings are kept too. Later editions: the normal summary.
 - Only the newspaper: send the HTML file the script printed, with one sentence on why there is no newsstand and, for a copy to share, what was left out.
 - Every other run, scheduled or interactive: the session's final reply is always shown to the reader, so it is the **edition summary** below and nothing else. Send no other messages.
 
@@ -167,7 +181,7 @@ Follow `references/archive.md` ("Adding today's edition"). Publish exactly the f
 1. Always: the edition number and today's headline (the artifact card already shows the link).
 2. **Attention:** only what asks the reader to act. Today that means security alert emails (new sign-in, password change): how many and which accounts, never codes, links or details.
 3. **Missing:** only when Calendar or Gmail is not connected or failed after the second try, or the weather or a whole section came out empty. One line, plain words, no technical details.
-4. 📅 Only in an interactive run when no scheduled task runs this newspaper (check when the scheduled-task tools can list them).
+4. 📅 Only in an interactive run, only when this session has a scheduled-task tool, and only when no scheduled task runs this newspaper (check when the tools can list them). Without a scheduled-task tool there is no 📅 line.
 
 Never in the summary: the agenda or emails waiting for a reply (they are in the paper), a sources list (the paper carries its sources), the steps taken, checks, unconfirmed numbers, newsstand or script details, or any other caveat. The reader asks if they want more.
 

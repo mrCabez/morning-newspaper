@@ -2,6 +2,22 @@
 
 All notable changes to Morning Newspaper. Each release on GitHub uses the matching section below as its notes.
 
+## v1.5.0 — 2026-11-15
+
+From the first run in the Claude mobile app (a separate account, no newsstand, shell network blocked).
+
+### New
+- **Step 0: choose the mode first.** Before anything else the skill checks the session's tools and decides where the edition goes (newsstand, single page or only the newspaper), where the agenda and weather come from, and whether scheduling exists. No more finding out at step 6 that the newsstand cannot be published.
+- **Single page with its state.** In apps whose artifact tools publish one HTML page per artifact, `assemble.py --single-page` writes today's edition with the reader's config and a compact index (numbering, extras, recent titles and link fingerprints) in a JSON block near the top. The next run reads the first lines of the page and restores everything with `assemble.py --unpack-state`, so the setup, the issue number and the repeat checks survive between runs.
+- **`collect.py --from-results`.** When the sources are blocked, Claude writes its web search results to `results.json` and the script applies the same date window, repeat checks, `avoid` list, same-fact groups, flags and IDs as a normal collection. Results with no date are kept, flagged `date?`, to be confirmed. The weather can come from the app's weather tool, and "On this day" from the Wikipedia page for the date.
+
+### Fixed
+- **Weather without a link.** A forecast from the app's own weather tool has no page, and `assemble.py` refused it, so a page the numbers did not come from had to be linked. `url` is now optional, `source` names where the numbers came from, and a bad link is one error naming `weather.url`.
+- **One error per problem.** The page-wide link check no longer repeats a problem a field check already reported (the confusing `invalid link in page:` with an empty link).
+- **"Schedule my newspaper" only where it can be done.** The 📅 line and the setup's delivery-time question need a scheduled-task tool in the session.
+- **Local news for small towns.** Every local query carries the state or region (never the name alone: a town named after another place brought that place's news), the city's coordinates are confirmed by a search, and an empty local section gets one search for the region before being left out.
+- **Docs:** the phone's calendar tool as an agenda source, the hosts the shell needs, and the working folder when the publishing tool reads from one fixed folder.
+
 ## v1.4.3 — 2026-11-15
 
 ### Fixed

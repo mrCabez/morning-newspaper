@@ -1,8 +1,13 @@
 """scripts/assemble.py: builds the edition HTML and the newsstand index from edition.json."""
 import html
+import json
 import re
+import subprocess
+import sys
 
 import pytest
+
+from conftest import SCRIPTS
 
 
 def ok(proc):
@@ -594,3 +599,101 @@ def test_full_month_names_in_every_label_file():
     for path in (SKILL / "assets" / "i18n").glob("*.json"):
         months = json.loads(path.read_text(encoding="utf-8"))["months"]
         assert len(months) == 12 and all(m.strip() for m in months), path.name
+
+
+# ---------------------------------------------------------------- v1.5.0: weather without a link
+
+def test_weather_from_a_tool_needs_no_link(assembler):
+    """A forecast from the app's weather tool has no page: no url, an optional source name."""
+    assembler.edition["weather"] = {"max": 29, "min": 19, "condition": "Partly sunny", "icon": "sun-cloud",
+                                    "source": "app weather tool"}
+    proc = assembler.run()
+    ok(proc)
+    page = assembler.page()
+    assert "29° / 19°" in page
+    assert "app weather tool" in page
+
+
+def test_weather_with_a_bad_link_names_the_field_once(assembler):
+    assembler.edition["weather"] = {"max": 29, "min": 19, "condition": "Sunny", "url": "http://x.example/"}
+    proc = refused(assembler.run())
+    errors = [l for l in proc.stdout.splitlines() if l.startswith("ERROR:")]
+    assert len(errors) == 1 and "weather.url" in errors[0]
+
+
+def test_missing_link_is_reported_once(assembler):
+    """The page-wide link check no longer repeats an error a field check already named."""
+    assembler.edition["sections"]["tech"][0].update(ref=None, outlet="X")
+    proc = refused(assembler.run())
+    assert "invalid link in page" not in proc.stdout
+    assert "tech[0]: missing link" in proc.stdout
+
+
+# ---------------------------------------------------------------- v1.5.0: single page with state
+
+def single_page(assembler, **kw):
+    proc = assembler.run("--single-page", **kw)
+    ok(proc)
+    assert "SINGLE PAGE" in proc.stdout
+    return (assembler.tmp / "work" / "single" / "index.html").read_text(encoding="utf-8"), proc
+
+
+def state_of(page):
+    m = re.search(r'<script type="application/json" id="morning-newspaper-state">(.*?)</script>', page, re.S)
+    assert m, "the single page must carry its state"
+    return json.loads(m.group(1))
+
+
+def test_single_page_carries_the_state(assembler):
+    page, proc = single_page(assembler)
+    state = state_of(page)
+    assert state["config"]["city"] == assembler.config["city"]
+    entry = state["index"]["editions"][0]
+    assert entry["number"] == 1 and "links" not in entry and entry["link_ids"]
+    assert "ARTIFACT TITLE:" in proc.stdout
+    assert "../index.html" not in page  # no newsstand button
+    assert re.search(r"<title>Morning Newspaper</title>", page)
+    # The state sits near the top, so reading the first lines of the page is enough.
+    assert page.index("morning-newspaper-state") < page.index("<style>")
+    assert not (assembler.tmp / "work" / "archive").exists()
+
+
+def test_single_page_state_cannot_close_its_script(assembler):
+    assembler.config["newspaper"]["motto"] = "News </script><b>fresh</b>"
+    page, _ = single_page(assembler)
+    head = page.split("<style>", 1)[0]
+    assert head.count("</script>") == 1
+    assert state_of(page)["config"]["newspaper"]["motto"] == "News </script><b>fresh</b>"
+
+
+def test_unpack_state_round_trip_continues_the_numbering(assembler, tmp_path):
+    page, _ = single_page(assembler)
+    raw = re.search(r'id="morning-newspaper-state">(.*?)</script>', page).group(1)
+    (tmp_path / "state.json").write_text(raw, encoding="utf-8")
+    out = tmp_path / "next"
+    proc = subprocess.run([sys.executable, str(SCRIPTS / "assemble.py"), "--unpack-state",
+                           str(tmp_path / "state.json"), "--work", str(out)], capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stdout
+    assert "STATE:" in proc.stdout
+    assert json.loads((out / "config.json").read_text(encoding="utf-8"))["city"] == assembler.config["city"]
+    index = json.loads((out / "index.json").read_text(encoding="utf-8"))
+    assembler.edition["date"] = "2026-11-14"
+    page2, proc2 = single_page(assembler, index=index)
+    assert "No. 002" in proc2.stdout
+    assert [e["number"] for e in state_of(page2)["index"]["editions"]] == [2, 1]
+
+
+def test_unpack_state_accepts_the_whole_page_and_refuses_garbage(assembler, tmp_path):
+    page, _ = single_page(assembler)
+    (tmp_path / "page.html").write_text(page, encoding="utf-8")
+    run = lambda f: subprocess.run([sys.executable, str(SCRIPTS / "assemble.py"), "--unpack-state", str(f),
+                                    "--work", str(tmp_path / "w")], capture_output=True, text=True)
+    assert run(tmp_path / "page.html").returncode == 0
+    (tmp_path / "bad.json").write_text("{not json", encoding="utf-8")
+    proc = run(tmp_path / "bad.json")
+    assert proc.returncode == 1 and proc.stdout.startswith("ERROR:") and "Traceback" not in proc.stderr
+
+
+def test_only_one_output_mode(assembler):
+    proc = assembler.run("--single-page", "--standalone")
+    assert proc.returncode != 0

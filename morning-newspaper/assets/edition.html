@@ -100,7 +100,7 @@ a{color:var(--azul)}a:hover{color:var(--verm)}
 {{{SVG_WEATHER}}}
 <div>
 <div class="rot sc">{{WEATHER_TITLE}}</div>
-<div><b>{{MAX}}° / {{MIN}}°</b> · {{CONDITION}} · <a href="{{URL_WEATHER}}" target="_blank" rel="noopener">{{L_source_short}}</a></div>
+<div><b>{{MAX}}° / {{MIN}}°</b> · {{CONDITION}}<!--IF:url_weather--> · <a href="{{URL_WEATHER}}" target="_blank" rel="noopener">{{L_source_short}}</a><!--/IF:url_weather--><!--IF:weather_source--> · {{L_source_short}}: {{WEATHER_SOURCE}}<!--/IF:weather_source--></div>
 </div>
 </section>
 <!--/IF:weather-->

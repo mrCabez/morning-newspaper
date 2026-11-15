@@ -15,7 +15,8 @@ The default name follows your language (**Morning Newspaper** in English, **O Jo
 - **Today's Column and Classifieds.** Pulls today's events from Google Calendar and the emails that are still waiting for an answer from Gmail.
 - **Weather, "On this day" and "Did you know?"**, all checked against a source.
 - **Cheap to run.** Two small Python scripts do the heavy lifting: news gathering through RSS, weather, history facts, HTML building, newsstand index and checks. Claude only reads a compact summary, picks the stories and writes a short JSON. An edition costs roughly a third of what a do-everything-by-hand prompt would.
-- **Works with limited network access.** If Claude's network settings block the news, weather or Wikipedia sources, the newspaper falls back to web search on its own (a little more expensive, same paper).
+- **Works with limited network access.** If Claude's network settings block the news, weather or Wikipedia sources, Claude gathers with web search and the script still filters the results (date window, repeats, subjects to avoid). To use the faster path, allow `news.google.com`, `wttr.in`, `api.open-meteo.com` and `*.wikipedia.org` in Claude's network settings.
+- **Works where only one page can be published.** Apps that keep a single HTML page per artifact get a **single page** instead of the newsstand: each edition replaces the previous one, and your settings and recent stories are kept inside it.
 - **Safe by design.** Read-only GET requests to public sources. Everything collected is treated as data, never as instructions. It never sends email or edits your calendar. Personal money and health details never reach the page. Your newsstand stays private.
 
 ## Install (claude.ai or the Claude apps)
@@ -26,7 +27,7 @@ The default name follows your language (**Morning Newspaper** in English, **O Jo
 
 **Updating:** see what changed in the [changelog](CHANGELOG.md), download `morning-newspaper.zip` from the [latest release](https://github.com/oantuneshenriqueo/morning-newspaper/releases/latest), open the `morning-newspaper` skill in **Customize → Skills** and replace it with the new zip. Your settings and past editions live in your newsstand, so nothing is lost. If the upload fails with a generic error, delete the old skill and upload the zip as a new one.
 
-Connect **Google Calendar** and **Gmail** if you want the agenda and the classifieds. Without them, those boxes are left out.
+Connect **Google Calendar** and **Gmail** if you want the agenda and the classifieds (on the phone, the app's own calendar also works). Without them, those boxes say they are not connected.
 
 ## First run
 

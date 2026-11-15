@@ -46,6 +46,16 @@ No artifact tools in this session, or publishing still fails after the retries b
 5. Version conflict: read the index again, save it to `WORK/index.json`, rerun `assemble.py` and publish. On the third failure, stop publishing: rerun `assemble.py` with `--standalone`, deliver that page and tell the reader why the newsstand was not updated.
 6. `index.html` missing from the newsstand: nothing to do, the script always lists it.
 
+## Single page
+
+When the artifact tools publish only one HTML page per artifact (SKILL.md, step 0), there is no newsstand. Instead one private artifact, titled with the newspaper's name, always shows the latest edition. Its page carries the reader's state (config and a compact index: numbering, extras and the last 14 editions' titles and link fingerprints) in a `<script type="application/json" id="morning-newspaper-state">` line near the top, so nothing is lost between runs.
+
+**Finding it (step 1):** the slug from the request or the task prompt; otherwise search the reader's artifacts by the newspaper's name and take the one whose page has that script. Read only the first lines of the page (the state is on one line near the top), copy the JSON inside the script exactly as it is into `WORK/state.json` with the file-writing tool, and run `python3 SKILL/scripts/assemble.py --unpack-state WORK/state.json --work WORK`. It writes `WORK/config.json` and `WORK/index.json`. Not found: first run (`references/setup.md`), or a sample edition in a scheduled run.
+
+**Publishing (step 6):** `assemble.py --single-page` writes `WORK/single/index.html` and prints `ARTIFACT TITLE`. Publish that one file from disk, never pasted into the call: as a new version of the same artifact (with the version you read) or, the first time, as a new artifact with that title and the icon "newspaper". On a version conflict, read the page again, unpack the state again, rerun `assemble.py` and publish once more.
+
+**A newsstand that cannot be published:** if publishing the newsstand's files is refused because the tool takes only one page, rerun `assemble.py` with `--single-page` (same `--index`) and publish that instead. Never publish an edition as the cover of an existing newsstand.
+
 ## The index entry
 Written by `assemble.py`; never edit the index by hand. Each entry has `date`, `number`, `weekday`, `type` ("morning" or "weekend"), `headline`, `summary`, `file`, `extras` (`history`, `did_you_know`: one short line each, so they are not repeated), and for the last 14 editions `titles`, `source_titles` (the titles as collected, before rewriting) and `links`. Collection compares new stories only against those 14 editions, so a recurring subject (a monthly rate decision, a yearly event) is never blocked by an old headline. The index also carries `newspaper`, `founded` and the `labels` the newsstand page uses.
 
