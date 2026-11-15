@@ -567,3 +567,30 @@ def test_date_before_founding_is_refused(assembler):
     proc = assembler.run(index={"founded": "2026-12-01", "editions": []})
     refused(proc)
     assert "before the newsstand was founded" in proc.stdout
+
+
+def test_warns_about_labels_left_in_english(assembler):
+    """v1.4.3: a language with no shipped file and incomplete config.labels says which keys are missing."""
+    assembler.config["language"] = "fr"
+    assembler.config["labels"] = {"headline": "À la une", "weekdays": ["lundi", "mardi", "mercredi", "jeudi",
+                                  "vendredi", "samedi", "dimanche"]}
+    proc = ok(assembler.run())
+    warn = [l for l in proc.stdout.splitlines() if l.startswith("WARNING:") and "still in English" in l]
+    assert warn, proc.stdout
+    assert "default_newspaper_name" in warn[0] and "months" in warn[0]
+    assert " headline," not in warn[0] and "weekdays," not in warn[0].replace("weekdays_short", "")
+
+
+@pytest.mark.parametrize("lang", ["pt-BR", "pt-PT", "es-MX", "en"])
+def test_no_label_warning_for_shipped_languages(assembler, lang):
+    assembler.config["language"] = lang
+    proc = ok(assembler.run())
+    assert "still in English" not in proc.stdout
+
+
+def test_full_month_names_in_every_label_file():
+    import json
+    from conftest import SKILL
+    for path in (SKILL / "assets" / "i18n").glob("*.json"):
+        months = json.loads(path.read_text(encoding="utf-8"))["months"]
+        assert len(months) == 12 and all(m.strip() for m in months), path.name

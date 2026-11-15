@@ -2,6 +2,12 @@
 
 All notable changes to Morning Newspaper. Each release on GitHub uses the matching section below as its notes.
 
+## v1.4.3 — 2026-11-15
+
+### Fixed
+- **Languages without a label file** (anything but English, Portuguese and Spanish): labels the setup forgot to translate used to fall back to English silently. `assemble.py` now prints a `WARNING` listing the keys still in English, and the skill translates them into `config.labels` and saves the config.
+- **Old-news check in every language**: month names were fixed in Portuguese, Spanish and English, so in other languages a story about "septembre" or "ottobre del 2025" was not flagged. The label files gain `months` (full month names), and `collect.py` also reads `config.labels.months`, matched exactly as written ("mars" is March, "Mars" is the planet). A year now counts when it comes within the next two words ("ottobre del 2025").
+
 ## v1.4.2 — 2026-11-15
 
 ### Fixed

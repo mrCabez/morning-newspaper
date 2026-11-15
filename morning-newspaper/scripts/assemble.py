@@ -114,6 +114,28 @@ def long_quotes(t):
     return [c for c in re.findall(r"[\"“«‘]([^\"”»’]+)[\"”»’]", t or "") if word_count(c) >= 15]
 
 
+def label_file(folder, lang):
+    """The shipped label file for a language: exact match, else the base language, else any regional
+    file of it ("pt-PT" and "pt" use pt-BR.json). None if the language has no file."""
+    base = lang.split("-")[0].lower()
+    files = sorted(n[:-5] for n in os.listdir(folder) if n.endswith(".json"))
+    return next((c for c in files if c.lower() == lang.lower()), None) \
+        or next((c for c in files if c.lower() == base), None) \
+        or next((c for c in files if c.lower().split("-")[0] == base), None)
+
+
+def missing_labels(skill, cfg):
+    """Keys still in English: the language ships no label file and config.labels lacks them."""
+    lang = cfg.get("language") or "en"
+    folder = os.path.join(skill, "assets", "i18n")
+    if label_file(folder, lang):
+        return []
+    with open(os.path.join(folder, "en.json"), encoding="utf-8") as f:
+        keys = [k for k in json.load(f) if not k.startswith("_") and k != "html_lang"]
+    custom = cfg.get("labels") or {}
+    return [k for k in keys if k not in custom]
+
+
 def load_labels(skill, cfg):
     lang = cfg.get("language") or "en"
     folder = os.path.join(skill, "assets", "i18n")
@@ -121,11 +143,7 @@ def load_labels(skill, cfg):
         labels = json.load(f)
     # Exact file first; otherwise the base language or any regional file of it ("pt-PT" and "pt"
     # use pt-BR.json): labels in a close variant beat a page in English.
-    base = lang.split("-")[0].lower()
-    files = sorted(n[:-5] for n in os.listdir(folder) if n.endswith(".json"))
-    match = next((c for c in files if c.lower() == lang.lower()), None) \
-        or next((c for c in files if c.lower() == base), None) \
-        or next((c for c in files if c.lower().split("-")[0] == base), None)
+    match = label_file(folder, lang)
     if match and match != "en":
         with open(os.path.join(folder, f"{match}.json"), encoding="utf-8") as f:
             labels.update(json.load(f))
@@ -136,7 +154,7 @@ def load_labels(skill, cfg):
     return labels
 
 
-LABEL_LISTS = {"weekdays": 7, "weekdays_short": 7, "months_short": 12}
+LABEL_LISTS = {"weekdays": 7, "weekdays_short": 7, "months_short": 12, "months": 12}
 
 
 def label_errors(L):
@@ -270,6 +288,11 @@ def build():
             print("ERROR:", e)
         print("Nothing was written. Fix the labels in config.json and run again.")
         return 1
+    untranslated = missing_labels(a.skill, cfg)
+    if untranslated:
+        print(f"WARNING: {len(untranslated)} labels are still in English for language "
+              f"\"{cfg.get('language')}\" (no file in assets/i18n/): {', '.join(untranslated)}. "
+              "Translate them into config.labels and save config.json.")
     tz = dt.timezone.utc
     if ZoneInfo:
         try:

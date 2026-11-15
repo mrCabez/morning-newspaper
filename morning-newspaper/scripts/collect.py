@@ -38,7 +38,7 @@ try:
 except Exception:  # pragma: no cover
     ZoneInfo = None
 
-UA = "morning-newspaper/1.4.2 (personal newspaper; RSS reader)"
+UA = "morning-newspaper/1.4.3 (personal newspaper; RSS reader)"
 TIMEOUT = 12
 MAX_BYTES = 5_000_000
 # Stories are only compared against the latest editions: a headline from months ago must not
@@ -177,6 +177,15 @@ MONTHS = {  # (lowercase names, accents kept) → month number; English needs a 
 }
 MONTHS_EN = {m: i for i, m in enumerate(["January", "February", "March", "April", "", "June", "July", "August",
                                          "September", "October", "November", "December"], 1) if m}
+MONTHS_READER = {}  # config.labels.months (other languages), matched exactly as written: "mars" ≠ "Mars"
+
+
+def set_reader_months(cfg):
+    names = ((cfg.get("labels") or {}).get("months")) or []
+    MONTHS_READER.clear()
+    if isinstance(names, list) and len(names) == 12:
+        MONTHS_READER.update({n.strip(): i for i, n in enumerate(names, 1)
+                              if isinstance(n, str) and re.fullmatch(r"\w+", n.strip())})
 
 
 def other_month(title, day):
@@ -186,11 +195,12 @@ def other_month(title, day):
     with a later year is never flagged, and without a year the next three months count as upcoming."""
     tokens = re.findall(r"\w+", title or "")
     for i, tok in enumerate(tokens):
-        m = MONTHS.get(tok.lower()) or MONTHS_EN.get(tok)
+        m = MONTHS.get(tok.lower()) or MONTHS_EN.get(tok) or MONTHS_READER.get(tok)
         if not m:
             continue
-        after = [t for t in tokens[i + 1:i + 3] if t.lower() not in ("de", "del", "of")][:1]
-        year = int(after[0]) if after and re.fullmatch(r"(19|20)\d\d", after[0]) else None
+        # "outubro de 2024", "octobre 2024", "ottobre del 2024": a year in the next two words
+        after = [t for t in tokens[i + 1:i + 3] if re.fullmatch(r"(19|20)\d\d", t)][:1]
+        year = int(after[0]) if after else None
         if year is not None:
             back = (day.year - year) * 12 + day.month - m
         else:
@@ -543,6 +553,7 @@ def main():
         cfg = json.load(f)
     global LANG
     LANG = str(cfg.get("language") or "").lower()
+    set_reader_months(cfg)
     tz = tz_of(cfg)
     now = dt.datetime.now(tz)
     day = dt.date.fromisoformat(a.date) if a.date else now.date()

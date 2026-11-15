@@ -522,3 +522,33 @@ def test_same_fact_groups_do_not_chain(collect_module, offline, config):
     fire = by_title["Incêndio atinge fábrica em Divinópolis"]["id"]
     assert by_title["Incêndio em fábrica fecha rodovia MG-050"]["same_as"] == fire
     assert "same_as" not in by_title["Acidente fecha rodovia MG-050 em Itaúna"]
+
+
+FR_MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre",
+             "octobre", "novembre", "décembre"]
+
+
+@pytest.mark.parametrize("title, flagged", [
+    ("Bilan de septembre pour les marchés", True),
+    ("Rapport d'octobre 2024 publié", True),
+    ("Soldes prévus en décembre", False),
+    ("Mission vers Mars annoncée", False),   # month names match as written: "mars" ≠ "Mars"
+    ("La réforme entre en vigueur en janvier 2027", False),
+])
+def test_other_month_uses_the_readers_month_labels(collect_module, title, flagged):
+    """v1.4.3: languages without a shipped label file get the old-news check from config.labels.months."""
+    collect_module.set_reader_months({"language": "fr", "labels": {"months": FR_MONTHS}})
+    try:
+        assert collect_module.other_month(title, dt.date(2026, 11, 13)) is flagged
+    finally:
+        collect_module.set_reader_months({})
+
+
+def test_other_month_finds_the_year_after_a_connector(collect_module):
+    collect_module.set_reader_months({"labels": {"months": ["gennaio", "febbraio", "marzo", "aprile", "maggio",
+                                     "giugno", "luglio", "agosto", "settembre", "ottobre", "novembre", "dicembre"]}})
+    try:
+        assert collect_module.other_month("Dati di dicembre del 2026", dt.date(2026, 11, 13)) is False
+        assert collect_module.other_month("Dati di ottobre del 2025", dt.date(2026, 11, 13)) is True
+    finally:
+        collect_module.set_reader_months({})

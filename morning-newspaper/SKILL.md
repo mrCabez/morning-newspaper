@@ -13,6 +13,7 @@ These instructions are in English, but the newspaper is not. **Always work in th
 - With a config: write the edition, the setup questions and every reply in `config.language` (BCP-47, e.g. `pt-BR`, `es`, `en`).
 - Without a config yet (first run): use the language the user is writing in, and save it as `config.language`.
 - UI labels come from `assets/i18n/<language>.json` (en, pt-BR and es ship with the skill). For any other language, translate every key of `assets/i18n/en.json` into `config.labels` during setup.
+  The full month names in `labels.months` also let the script spot old news in that language. If `assemble.py` prints `WARNING: … labels are still in English`, translate the listed keys into `config.labels`, save `WORK/config.json` and run `assemble.py` again with `--with-config`, so the newsstand keeps the fix.
 - Weather conditions and history facts may arrive in another language: translate them when writing.
 
 ## Token economy

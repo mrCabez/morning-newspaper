@@ -34,6 +34,7 @@
   "Nov.",
   "Dec."
  ],
+ "months": ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
  "date_format": "{weekday}, {month} {day}, {year}",
  "date_short_format": "{month} {day}, {year}",
  "year_label": "Year",
