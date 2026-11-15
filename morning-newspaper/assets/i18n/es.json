@@ -70,6 +70,8 @@
  "in_gmail": "en Gmail",
  "history_title": "Tal día como hoy",
  "didyouknow_title": "¿Sabías que…?",
+ "no_news_title": "Sin noticias confirmadas hoy",
+ "no_news_text": "Ninguna noticia de tus secciones pudo confirmarse hoy; el resto del periódico sigue abajo.",
  "week_in_a_cup": "La semana en una taza",
  "footer_title": "Créditos",
  "footer_credits": "Redacción, edición y diseño: {editor} · Impreso a las {time}",

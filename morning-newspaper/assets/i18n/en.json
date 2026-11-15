@@ -70,6 +70,8 @@
  "in_gmail": "in Gmail",
  "history_title": "On this day",
  "didyouknow_title": "Did you know?",
+ "no_news_title": "No confirmed news today",
+ "no_news_text": "None of today's stories in your sections could be confirmed; the rest of the paper is below.",
  "week_in_a_cup": "The week in a cup",
  "footer_title": "Masthead",
  "footer_credits": "Reporting, editing and layout: {editor} · Printed at {time}",

@@ -735,3 +735,14 @@ def test_next_steps_are_printed_after_ok(assembler):
 def test_a_lone_extra_takes_the_full_width(assembler):
     ok(assembler.run())
     assert ".extras>.extra:only-child{grid-column:1/-1}" in assembler.page()
+
+
+def test_a_day_with_no_story_still_gets_its_edition(assembler):
+    """Every story left out by the rules: the paper still comes out, with a note instead of a headline."""
+    assembler.edition.pop("headline")
+    assembler.edition["sections"] = {}
+    proc = ok(assembler.run())
+    page = assembler.page()
+    assert "No confirmed news today" in page
+    assert "Traceback" not in proc.stderr
+    assert assembler.new_index()["editions"][0]["headline"] == "No confirmed news today"

@@ -2,6 +2,28 @@
 
 All notable changes to Morning Newspaper. Each release on GitHub uses the matching section below as its notes.
 
+## v1.7.0 — 2026-11-15
+
+From the debug report of edition No. 005 (an afternoon reissue in a session whose network blocked every source).
+
+### New
+- **A weaker reissue never replaces the published edition.** When today's edition is already at the newsstand with more stories, `assemble.py` prints `KEEP:` and writes nothing. A scheduled run keeps the published edition; an interactive run asks the reader, and `--replace` publishes over it only after a yes.
+- **A day with no story still gets its edition.** If no story passes the rules, the paper comes out with the agenda, classifieds, weather and extras, and a short "no confirmed news today" note in place of the headline. The summary adds a **Missing** line.
+- **`DROPPED` in the collection.** Each section lists what the script left out and why (outside the window, already printed, `avoid` list, same story), so a missing story never has to be guessed.
+- **Rules that are never optional.** SKILL.md now opens with the six rules editions broke: every fact has a source, no guessed dates or hand-filtered results, no extra searches, step 7 always, the step 8 summary only, and `KEEP` means stop. `assemble.py` also prints the mandatory next steps after `OK:`.
+
+### Fixed
+- Two different games with release dates in the same month counted as one story: titles are now compared without dates, months and years.
+- A summary that added facts to its title was erased; only one that merely repeats the title is now.
+- With the network blocked, every section printed `(nothing new)`; it now says the sources were not reached.
+- A lone extra box ("On this day" or "Did you know?") now takes the full width.
+
+### Changed
+- **Headline facts come from an opened page.** Beyond the collected title and summary, only what the opened page says is printed; the search tool's own written summary is not a source.
+- **No network:** every result goes to `results.json` with its own snippet (never the search tool's answer), dates only when shown as the publication date, and no second round of section searches.
+- **"Did you know?"** tries up to three confirming pages and widens today's theme to any technology or science fact before leaving the box out.
+- **Attention line:** accounts only, never dates, places or devices.
+
 ## v1.6.0 — 2026-11-15
 
 Faster editions that spend fewer tokens. In an agent session every call re-reads the whole conversation, so the work here is fewer rounds and less text pulled in.

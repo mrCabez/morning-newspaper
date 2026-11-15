@@ -106,6 +106,14 @@ a{color:var(--azul)}a:hover{color:var(--verm)}
 </section>
 <!--/IF:weather-->
 
+<!--IF:no_news-->
+<article>
+<div class="chapeu sc">{{L_headline}}</div>
+<h1 class="manchete display">{{L_no_news_title}}</h1>
+<div class="fina">{{L_no_news_text}}</div>
+</article>
+<!--/IF:no_news-->
+
 <!--IF:headline-->
 <article>
 <div class="chapeu sc">{{L_headline}} · {{HEADLINE_SECTION}}</div>

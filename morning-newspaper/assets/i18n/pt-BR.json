@@ -70,6 +70,8 @@
  "in_gmail": "no Gmail",
  "history_title": "Hoje na história",
  "didyouknow_title": "Você sabia?",
+ "no_news_title": "Sem notícias confirmadas hoje",
+ "no_news_text": "Nenhuma notícia das suas seções pôde ser confirmada hoje; o restante do jornal segue abaixo.",
  "week_in_a_cup": "A semana em uma xícara",
  "footer_title": "Expediente",
  "footer_credits": "Redação, revisão e diagramação: {editor} · Impresso às {time}",

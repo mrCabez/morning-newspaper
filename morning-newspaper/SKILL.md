@@ -114,7 +114,7 @@ Use each section's `interest` and `count` from the config:
 - `city`: the title names the reader's city. In the local section prefer these over stories from neighbouring towns.
 - Drop gossip, sponsored content, small-company press releases and news from other regions that does not affect the reader.
 - Headline: the story most relevant to the reader today (affects what they do, use or decide).
-- A section with nothing good is left out. Never pad with weak or invented stories. The local section first gets one more search for the region (a neighbouring town, or the region with its state) and is left out only if that brings nothing either.
+- A section with nothing good is left out. Never pad with weak or invented stories. Rule 1 drops facts, rarely whole stories: a story that cannot be confirmed further is told only as its collected title and summary say. No story at all passes: leave `headline` and `sections` out; the edition still comes out (agenda, classifieds, weather, extras) with a short "no confirmed news today" note in place of the headline. The local section first gets one more search for the region (a neighbouring town, or the region with its state) and is left out only if that brings nothing either.
 - Unverifiable claims (only small outlets, nothing confirms it) are written as "outlets report…", or left out.
 - "On this day": pick one `h` (it comes from Wikipedia, which counts as confirmation).
 - "Did you know?": pick one `k` (Wikipedia articles on today's theme; their text counts as confirmation) and tell one lesser-known, concrete fact from its text, in 1–2 sentences. Not a definition, and never these overused classics: the moth "first bug", Ada Lovelace as first programmer, QWERTY made to slow typists, the first email or website, "640K", the wooden first mouse, Apollo's computer vs a phone, the origin of "spam". No `k` holds such a fact (or none came): `references/extras.md`.
@@ -180,7 +180,7 @@ Follow `references/archive.md` ("Adding today's edition"). Publish exactly the f
 
 1. Always: the edition number and today's headline (the artifact card already shows the link).
 2. **Attention:** only what asks the reader to act. Today that means security alert emails (new sign-in, password change): how many and which accounts, never codes, links, dates, places, devices or other details.
-3. **Missing:** only when Calendar or Gmail is not connected or failed after the second try, or the weather or a whole section came out empty. One line, plain words, no technical details.
+3. **Missing:** only when Calendar or Gmail is not connected or failed after the second try, or the weather, a whole section or every story came out empty. One line, plain words, no technical details.
 4. 📅 Only in an interactive run, only when this session has a scheduled-task tool, and only when no scheduled task runs this newspaper (check when the tools can list them). Without a scheduled-task tool there is no 📅 line.
 
 Never in the summary: the agenda or emails waiting for a reply (they are in the paper), a sources list (the paper carries its sources), the steps taken, checks, unconfirmed numbers, newsstand or script details, or any other caveat. The reader asks if they want more.

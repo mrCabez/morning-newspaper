@@ -437,8 +437,14 @@ def build():
         return r
 
     h = ed.get("headline")
+    # A day with no story that passed the rules still gets its edition (agenda, classifieds, weather,
+    # extras) with a short note in place of the headline: never an empty-handed run. A headline is
+    # only optional when there is no story at all.
+    secs = ed.get("sections") or {}
+    no_news = not h and isinstance(secs, dict) and not any(secs.values())
     if not h:
-        errors.append("missing headline")
+        if not no_news:
+            errors.append("missing headline (make the most relevant story the headline)")
         h = {}
     else:
         h = resolve(h, "headline")
@@ -599,7 +605,7 @@ def build():
         "url_weather": bool(weather_url),
         "weather_source": bool(not weather_url and (weather or {}).get("source")),
         "WEATHER_SOURCE": (weather or {}).get("source", ""),
-        "headline": bool(h), "HEADLINE_SECTION": h_section, "HEADLINE_TITLE": h.get("title", ""),
+        "no_news": no_news, "headline": bool(h), "HEADLINE_SECTION": h_section, "HEADLINE_TITLE": h.get("title", ""),
         "HEADLINE_DECK": h.get("deck", ""),
         "SVG_HEADLINE": svg(SVG_ICON.get(h.get("icon"), SVG_ICON["newspaper"]), 56),
         "FIRST_LETTER": first_letter, "HEADLINE_REST": text_h[len(first_letter):],
@@ -681,14 +687,15 @@ def build():
             f.write(page)
         print(f"OK: {L['issue_label']} {number:03d} · {day.isoformat()} · {total} stories · "
               f"{'SHARE COPY' if a.share else 'STANDALONE'}")
-        print("HEADLINE:", h.get("title", ""))
+        print("HEADLINE:", h.get("title", "") or "(none: no story today; the summary adds a Missing line for the news)")
         print(f"NOT FOR THE NEWSSTAND: send this file to the reader: {os.path.abspath(path)}")
         return 0
 
     stories = ([h] if h else []) + [n for v in sections.values() for n in v]
     entry = {
         "date": day.isoformat(), "number": number, "weekday": L["weekdays"][day.weekday()],
-        "type": "sample" if sample else ("weekend" if weekend else "morning"), "headline": h.get("title", ""), "summary": summary_line,
+        "type": "sample" if sample else ("weekend" if weekend else "morning"),
+        "headline": h.get("title", "") or (L["no_news_title"] if no_news else ""), "summary": summary_line,
         "file": f"editions/{day.isoformat()}.html",
         "extras": {"history": hist.get("summary") or short(hist.get("text", "")),
                    "did_you_know": dyk.get("summary") or short(dyk.get("text", ""))},
@@ -721,7 +728,7 @@ def build():
             f.write(page)
         print(f"OK: {L['issue_label']} {number:03d} · {day.isoformat()} · {total} stories · SINGLE PAGE"
               f"{' · REISSUE' if existing else ''}")
-        print("HEADLINE:", h.get("title", ""))
+        print("HEADLINE:", h.get("title", "") or "(none: no story today; the summary adds a Missing line for the news)")
         print(f"ARTIFACT TITLE: {news_name}")
         print(f"PUBLISH this one file as the artifact's page (from disk, never pasted): {os.path.abspath(path)}")
         next_steps(True)
@@ -755,7 +762,7 @@ def build():
         publish.append("config.json")
     print(f"OK: {L['issue_label']} {number:03d} · {day.isoformat()} · {total} stories"
           f"{' · REISSUE' if existing else ''}")
-    print("HEADLINE:", h.get("title", ""))
+    print("HEADLINE:", h.get("title", "") or "(none: no story today; the summary adds a Missing line for the news)")
     print(f"NEWSSTAND TITLE: {stand_title}")
     print("PUBLISH (as -> path; index.html is the newsstand's main page, never an edition):")
     for p in publish:
