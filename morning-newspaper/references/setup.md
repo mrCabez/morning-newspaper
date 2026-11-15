@@ -59,6 +59,6 @@ After the edition, reply in their language with a short summary:
 - which connections are still missing (if any) and the newsstand slug (single page: the artifact, and the sentence from SKILL.md step 8).
 
 Then the schedule:
-- **A time was chosen** (7:00, 6:00 or another time): create the daily schedule now (see "Scheduling" in SKILL.md) and say so in the summary.
+- **A time was chosen** (7:00, 6:00 or another time): create the daily schedule now (`references/scheduling.md`) and say so in the summary.
 - **"Don't schedule for now", the quick start, or the question was skipped:** create nothing. Only if this session has a scheduled-task tool, end with one line telling them they can ask at any time, e.g.: "Whenever you want it every morning, just send me 'schedule my newspaper'."
 - **No scheduled-task tool in this session:** skip the delivery-time question in screen 2 (there is nothing to schedule) and create nothing.

@@ -36,7 +36,7 @@ Then read `config.json` and `editions/index.json` from it into `WORK/config.json
 3. In an interactive session, tell the reader the newsstand was created and give the slug, to put in the scheduled task prompt.
 
 ## When there can be no newsstand
-No artifact tools in this session, or publishing still fails after the retries below: make only the newspaper (SKILL.md, "Only the newspaper"), and tell the reader in one sentence why there is no newsstand. Never publish the newsstand or `config.json` anywhere public to make up for it: both are private.
+No artifact tools in this session, or publishing still fails after the retries below: make only the newspaper (`references/modes.md`), and tell the reader in one sentence why there is no newsstand. Never publish the newsstand or `config.json` anywhere public to make up for it: both are private.
 
 ## Adding today's edition
 1. Before collecting: list the newsstand's files, read its page, note its current version and save `config.json` and `editions/index.json` into WORK. If the list also shows the legacy `edicoes/indice.json` next to `editions/index.json`, note it for step 3.

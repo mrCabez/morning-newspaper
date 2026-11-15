@@ -35,24 +35,4 @@ Rules:
 - Sample editions (scheduled run before setup, see `references/sample.md`) are made with `assemble.py --sample`; nothing changes in the JSON.
 - `band` (top strip) is computed; set it only to replace the text. `date` is optional (defaults to the collection date).
 
-## Results file (no network)
-
-When the collection printed `NETWORK BLOCKED`, write the web results to `WORK/results.json` and run `collect.py --from-results` (SKILL.md, step 2). Plain data, one entry per result, in the reader's language as found:
-
-```json
-{
-  "news": [
-    {"section": "tech", "query": "the search you ran", "title": "...", "url": "https://...", "outlet": "Name",
-     "date": "2026-11-14", "summary": "the result's snippet"}
-  ],
-  "weather": {"max": 29, "min": 19, "condition": "...", "rain_chance": 47, "source": "app weather tool"},
-  "history": [{"year": 1889, "text": "...", "url": "https://pt.wikipedia.org/wiki/15_de_novembro"}]
-}
-```
-
-- `section` is a section `id` from config.json; `query` groups results so the script takes turns between searches.
-- `date`: only when the result shows it (`YYYY-MM-DD`, or a full date-time). No date: leave it out; the story is kept, flagged `date?`, and must be confirmed before use. Never guess a date.
-- `weather` and `history` are optional. `weather.url` only if the numbers came from that page.
-- The script drops what is outside the date window, repeated from the last 14 editions or on the `avoid` list, and prints IDs (`a1`, `h1`…) as usual.
-
 The script refuses (and writes nothing) when: a link is missing or not https, an outlet is missing, a `ref` does not exist or is repeated, a quote has 15+ words (titles and extras included), "Did you know?" has no https link, the weather `url` is given but not https, "On this day" uses a news ref, the date is before the newsstand was founded, there are more stories than `total_news.max`, the headline deck is missing, a section id is not in the config, or a template marker is left in the page. Fix the JSON and run again. Warnings (long titles, fewer or more stories than the usual range for the day, two stories marked as possibly the same fact) do not block.

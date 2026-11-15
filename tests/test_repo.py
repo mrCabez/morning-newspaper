@@ -130,4 +130,14 @@ def test_mode_is_chosen_first_and_schedule_line_needs_the_tool():
     assert "only when this session has a scheduled-task tool" in deliver_section()
     archive = (SKILL / "references" / "archive.md").read_text(encoding="utf-8")
     assert "## Single page" in archive and "--unpack-state" in archive
-    assert "--from-results" in text
+    assert "--from-results" in (SKILL / "references" / "no-network.md").read_text(encoding="utf-8")
+
+
+def test_skill_md_points_to_every_reference():
+    """v1.5.1: SKILL.md is the short daily path; every reference is reachable from its table."""
+    text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+    table = text[text.index("## When to read what"):text.index("## Language")]
+    for ref in sorted((SKILL / "references").iterdir()):
+        assert f"references/{ref.name}" in table, ref.name
+    for moved in ("## Scheduling", "### Only the newspaper", "| Missing tool |"):
+        assert moved not in text, moved
