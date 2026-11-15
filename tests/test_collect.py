@@ -692,3 +692,60 @@ def test_did_you_know_candidates_from_wikipedia(collect_module, offline, config)
     assert [c["title"] for c in cands] == ["Alpha", "Delta"]
     assert cands[0]["id"] == "k1" and cands[0]["url"].startswith("https://")
     assert len(cands[0]["text"]) <= 480
+
+
+# ---------------------------------------------------------------- debug of edition 005 (no network)
+
+def test_release_dates_do_not_make_two_games_one_story(collect_module):
+    """Two different games announced for the same month shared 'date', the month and the year."""
+    assert not collect_module.same_story(
+        "Littlelands release date: early access starts on PC on November 16, 2026",
+        "Salt and Soil early access date 9 November 2026 on Steam")
+    assert collect_module.same_story("Copom mantém Selic em 15%", "Copom mantém a Selic em 15% ao ano")
+
+
+def test_summary_with_new_facts_is_kept(collect_module):
+    title = "Queda da Microsoft: o que derrubou Outlook e Teams"
+    assert collect_module.adds_to("Falha em atualização de rede derrubou Outlook e Teams; serviço restabelecido "
+                                  "após várias horas", title)
+    assert not collect_module.adds_to("Queda da Microsoft derrubou Outlook e Teams", title)
+
+
+def test_from_results_says_what_it_dropped_and_why(collect_module, offline, monkeypatch, tmp_path, capsys, config):
+    today = dt.datetime.now(collect_module.tz_of(config)).date()
+    old = (today - dt.timedelta(days=30)).isoformat()
+    index = {"editions": [{"date": (today - dt.timedelta(days=1)).isoformat(), "number": 1,
+                           "titles": ["Hackers leak data of 7 million bank clients"], "links": []}]}
+    results = {"news": [
+        {"section": "tech", "query": "q", "title": "Hackers leak data of 7 million bank clients, bank says",
+         "url": "https://a.example/1", "outlet": "A", "date": today.isoformat()},
+        {"section": "tech", "query": "q", "title": "Old story about chips and memory prices",
+         "url": "https://c.example/3", "outlet": "C", "date": old},
+        {"section": "tech", "query": "q", "title": "Browser patches a flaw already under attack",
+         "url": "https://b.example/2", "outlet": "B", "date": today.isoformat()}]}
+    code, out, _ = run_from_results(collect_module, offline, monkeypatch, tmp_path, capsys, config, results,
+                                    index=index, date=today.isoformat())
+    assert code == 0
+    assert "DROPPED" in out
+    line = next(l for l in out.splitlines() if l.strip().startswith("tech:"))
+    assert "1 outside the window" in line and "1 same story as a recent edition (Hackers leak" in line
+
+
+def test_summary_kept_from_results(collect_module, offline, monkeypatch, tmp_path, capsys, config):
+    today = dt.datetime.now(collect_module.tz_of(config)).date()
+    results = {"news": [{"section": "tech", "query": "q", "title": "Microsoft outage takes down Outlook and Teams",
+                         "url": "https://a.example/1", "outlet": "A", "date": today.isoformat(),
+                         "summary": "A faulty network update caused the outage; service was restored after hours"}]}
+    _, _, data = run_from_results(collect_module, offline, monkeypatch, tmp_path, capsys, config, results,
+                                  date=today.isoformat())
+    assert data["news"]["tech"][0]["summary"].startswith("A faulty network update")
+
+
+def test_blocked_network_is_not_printed_as_nothing_new(collect_module, offline, monkeypatch, tmp_path, capsys, config):
+    (tmp_path / "config.json").write_text(json.dumps(config), encoding="utf-8")
+    monkeypatch.setattr(sys, "argv", ["collect.py", "--config", str(tmp_path / "config.json"),
+                                      "--work", str(tmp_path / "w"), "--date", "2026-11-15"])
+    assert collect_module.main() == 0
+    out = capsys.readouterr().out
+    assert "NETWORK BLOCKED" in out
+    assert "(nothing new)" not in out and "(not collected: no source answered)" in out

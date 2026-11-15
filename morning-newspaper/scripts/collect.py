@@ -175,13 +175,34 @@ def clean(txt, limit=220):
     return txt if len(txt) <= limit else txt[: limit - 1].rsplit(" ", 1)[0] + "…"
 
 
+# Words that date a title but say nothing about which fact it is: two release-date stories for
+# different games ("X early access date 9 November 2026", "Y release date: November 16, 2026")
+# must not count as one story because both name the month, the year and the word "date".
+DATE_WORDS = {"date", "release", "lancamento", "lanzamiento", "hoje", "today", "hoy",
+              "ontem", "yesterday", "ayer", "amanha", "tomorrow", "manana", "domingo", "segunda", "terca",
+              "quarta", "quinta", "sexta", "sabado", "sunday", "monday", "tuesday", "wednesday", "thursday",
+              "friday", "saturday", "lunes", "martes", "miercoles", "jueves", "viernes"}
+
+
+def _story_words(txt):
+    months = set(words(" ".join(list(MONTHS) + list(MONTHS_READER)))) | {m.lower() for m in MONTHS_EN}
+    return {p for p in words(txt) if len(p) > 3 and not p.isdigit() and p not in months and p not in DATE_WORDS}
+
+
 def same_story(a, b):
-    """Two titles tell the same story if they share most of their meaningful words."""
-    pa = {p for p in words(a) if len(p) > 3}
-    pb = {p for p in words(b) if len(p) > 3}
+    """Two titles tell the same story if they share most of their meaningful words (dates, months
+    and years left out: they are shared by unrelated stories of the same week)."""
+    pa = _story_words(a)
+    pb = _story_words(b)
     if not pa or not pb:
         return False
     return len(pa & pb) / min(len(pa), len(pb)) >= 0.6
+
+
+def adds_to(summary, title):
+    """True if the summary carries facts beyond its title (at least 3 meaningful words the title
+    does not have): only a summary that merely repeats the title is dropped."""
+    return len(_story_words(summary) - _story_words(title)) >= 3
 
 
 # Names a country goes by in different titles ("EUA", "Estados Unidos", "US"): folded into one
@@ -442,10 +463,33 @@ def collect_news(cfg, window_h, now, used_links, used_titles, tz):
     return rank_news(cfg, [sid for sid, _ in tasks], results, window_h, now, used_links, used_titles, tz), failures
 
 
+# Why candidates were left out, per section, so a missing story never has to be guessed:
+# {section: {reason: [count, [titles]]}}. Filled by rank_news, printed by main.
+DROPPED = {}
+
+
+def drop(sid, reason, title=None):
+    entry = DROPPED.setdefault(sid, {}).setdefault(reason, [0, []])
+    entry[0] += 1
+    if title and len(entry[1]) < 3:
+        entry[1].append(clean(title, 50))
+
+
+def dropped_lines():
+    out = []
+    for sid, reasons in DROPPED.items():
+        parts = []
+        for reason, (n, titles) in reasons.items():
+            parts.append(f"{n} {reason}" + (f" ({' / '.join(titles)})" if titles else ""))
+        out.append(f"{sid}: " + "; ".join(parts))
+    return out
+
+
 def rank_news(cfg, task_sections, results, window_h, now, used_links, used_titles, tz):
     """Filters and ranks candidates. results[i] holds the stories of search/feed i, which belongs to
     section task_sections[i]. A story whose date is unknown (only possible with --from-results) is
     kept after the dated ones and flagged "date?" so the model confirms it."""
+    DROPPED.clear()
     cutoff = now - dt.timedelta(hours=window_h)
     tasks = [(sid, None) for sid in task_sections]
     undated_last = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
@@ -463,11 +507,18 @@ def rank_news(cfg, task_sections, results, window_h, now, used_links, used_title
         for i, (task_sid, _) in enumerate(tasks):
             if task_sid != sid:
                 continue
-            ok = [it for it in results[i]
-                  if (it["date"] is None and it.get("undated_ok") or it["date"] is not None and it["date"] >= cutoff)
-                  and it["url"] not in used_links and link_id(it["url"]) not in used_links
-                  and not avoided(f"{it['title']} {it['summary']}", avoid)
-                  and not any(same_story(it["title"], t) for t in used_titles)]
+            ok = []
+            for it in results[i]:
+                if not (it["date"] is None and it.get("undated_ok") or it["date"] is not None and it["date"] >= cutoff):
+                    drop(sid, "outside the window")
+                elif it["url"] in used_links or link_id(it["url"]) in used_links:
+                    drop(sid, "link already printed", it["title"])
+                elif avoided(f"{it['title']} {it['summary']}", avoid):
+                    drop(sid, "avoid list", it["title"])
+                elif any(same_story(it["title"], t) for t in used_titles):
+                    drop(sid, "same story as a recent edition", it["title"])
+                else:
+                    ok.append(it)
             queues.append(sorted(ok, key=lambda x: x["date"] or undated_last, reverse=True))
         # Take turns: the newest story of each search, then the second of each, and so on.
         kept, limit, depth = [], sec.get("max_candidates", 10), 0
@@ -477,6 +528,8 @@ def rank_news(cfg, task_sections, results, window_h, now, used_links, used_title
                     it = q[depth]
                     if not any(it["url"] == k["url"] or same_story(it["title"], k["title"]) for k in kept):
                         kept.append(it)
+                    else:
+                        drop(sid, "same story as another candidate", it["title"])
             depth += 1
         kept.sort(key=lambda x: x["date"] or undated_last, reverse=True)
         # Local sections of a small town fill up with the region: the stories that name the city
@@ -556,7 +609,7 @@ def from_results(path, cfg, tz, now):
             continue
         when, day_only = result_date(r.get("date"), tz, now)
         summary = clean(r.get("summary") or "", 160)
-        if summary and same_story(summary, title):
+        if summary and not adds_to(summary, title):
             summary = ""
         key = (sid, str(r.get("query") or ""))
         if key not in queues:
@@ -854,7 +907,9 @@ def main():
                 line += f" [{', '.join(n['flags'])}]"
             print(line)
         if not news.get(sec["id"]):
-            print("(nothing new)")
+            failed = any(f.startswith(f"{sec['id']}:") for f in failures)
+            print("(not collected: no source answered)" if blocked else
+                  "(source failed: see FAILURES)" if failed else "(nothing new)")
     print("\n[history]")
     for h in history:
         print(f"{h['id']} | {h['year']} | {h['text']}"
@@ -864,6 +919,10 @@ def main():
         print(f"{d['id']} | {d['title']}{'' if d['lang'] == wiki_lang(cfg) else ' [' + d['lang'] + ']'} | {d['text']}")
     if out["did_you_know_used"]:
         print("[did_you_know already used] " + " / ".join(out["did_you_know_used"][:15]))
+    if DROPPED:
+        print("\nDROPPED (left out by the script, not by you):")
+        for line in dropped_lines():
+            print("  " + line)
     if blocked:
         print("\nNETWORK BLOCKED: no source could be reached. Follow 'No network' in SKILL.md.")
     elif failures:

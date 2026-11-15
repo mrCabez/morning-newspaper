@@ -323,6 +323,8 @@ def build():
                     help="like --standalone, for showing other people: says on the page what was left out")
     ap.add_argument("--single-page", action="store_true",
                     help="one page that replaces the previous one in the same artifact, carrying the reader's state")
+    ap.add_argument("--replace", action="store_true",
+                    help="reissue: replace today's published edition even if it has more stories")
     ap.add_argument("--unpack-state", metavar="FILE",
                     help="write WORK/config.json and WORK/index.json from the state copied from a single page")
     a = ap.parse_args()
@@ -655,6 +657,20 @@ def build():
         print("Nothing was written. Fix edition.json and run again.")
         return 1
 
+    # A reissue never silently replaces a fuller edition of the same day (an afternoon run with the
+    # network blocked can bring 2 stories where the morning had 5). Nothing is written; the model
+    # keeps the published edition unless the reader chooses to replace it (--replace).
+    if existing and not standalone and not a.replace:
+        before = len(existing.get("links") or []) or (len(existing.get("titles") or []) + 1 if existing.get("headline") else 0)
+        if before > total:
+            print(f"KEEP: today's edition No. {number:03d} is already published with {before} stories; "
+                  f"this reissue has {total}. Nothing was written.")
+            print("  Scheduled run: publish nothing; reply with the normal summary of the published edition "
+                  f"(headline: {existing.get('headline', '')}).")
+            print("  Interactive run: ask the reader in one line whether to replace it (it has fewer stories). "
+                  "If yes, run again with --replace; if not, keep it and say so in one line.")
+            return 3
+
     if standalone and not single:
         # Nothing goes to the newsstand: no index is written, so a copy can never replace the
         # morning entry by mistake if someone publishes WORK/archive later.
@@ -708,6 +724,7 @@ def build():
         print("HEADLINE:", h.get("title", ""))
         print(f"ARTIFACT TITLE: {news_name}")
         print(f"PUBLISH this one file as the artifact's page (from disk, never pasted): {os.path.abspath(path)}")
+        next_steps(True)
         return 0
 
     stand_title = f"{news_name} · {L['archive_title']}"
@@ -743,7 +760,18 @@ def build():
     print("PUBLISH (as -> path; index.html is the newsstand's main page, never an edition):")
     for p in publish:
         print(f"  {p} -> {os.path.abspath(os.path.join(dest, p))}")
+    next_steps(False)
     return 0
+
+
+def next_steps(single):
+    """What is left after the files are written, printed where the model reads it."""
+    print("NEXT (mandatory, in order):")
+    print("  6. Publish exactly the file" + ("" if single else "s") + " above, nothing else.")
+    print("  7. Check every sentence against what backs it (collected title and summary, a page you opened, "
+          "the Wikipedia text); remove what is not there, then rerun and republish if anything changed.")
+    print("  8. Reply with the edition summary (SKILL.md step 8): at most 4 lines, in the reader's language, "
+          "no process, sources, network or script details.")
 
 
 if __name__ == "__main__":

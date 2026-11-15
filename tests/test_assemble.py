@@ -710,3 +710,28 @@ def test_did_you_know_from_a_collected_candidate(assembler):
     shutil.rmtree(assembler.tmp / "work" / "archive")
     assembler.edition["did_you_know"] = {"ref": "a1", "text": "A news ref is not a candidate."}
     assert "not a 'Did you know?' candidate" in refused(assembler.run()).stdout
+
+
+# ---------------------------------------------------------------- a weaker reissue never replaces the edition
+
+def test_weaker_reissue_keeps_the_published_edition(assembler):
+    old = {"founded": "2026-11-10", "editions": [
+        {"date": "2026-11-13", "number": 5, "headline": "Fuller morning edition",
+         "links": [f"https://x.example/{i}" for i in range(20)]}]}
+    proc = assembler.run(index=old)
+    assert proc.returncode == 3, proc.stdout + proc.stderr
+    assert "KEEP:" in proc.stdout and "Fuller morning edition" in proc.stdout
+    assert "Traceback" not in proc.stderr
+    assert not proc.archive.exists()
+    proc = ok(assembler.run("--replace", index=old))
+    assert "REISSUE" in proc.stdout
+
+
+def test_next_steps_are_printed_after_ok(assembler):
+    proc = ok(assembler.run())
+    assert "NEXT (mandatory, in order):" in proc.stdout
+
+
+def test_a_lone_extra_takes_the_full_width(assembler):
+    ok(assembler.run())
+    assert ".extras>.extra:only-child{grid-column:1/-1}" in assembler.page()

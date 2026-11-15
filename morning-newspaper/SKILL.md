@@ -23,6 +23,17 @@ Gathering, building the HTML, the index and the mechanical checks are done by th
 
 **Every call costs the whole conversation again**, so fewer rounds matter more than shorter answers: send independent calls together in one block (the artifact list and reads; the collection, agenda and email; all fallback searches), read only the files the table asks for, and open a web page only when a rule below says so.
 
+## Rules that are never optional
+
+These are where editions have gone wrong. Each one is a requirement, not advice: breaking one makes the edition a failure even if the page looks fine. When a rule cannot be met, leave the item out; never improvise a way around it.
+
+1. **Every printed fact has a source you can point to:** the collected title and summary, a search result's own title and snippet, a page you opened, or the Wikipedia text. The search tool's own written answer or summary of the results is not a source, and neither is memory.
+2. **Never guess a date** and never decide on your own what the script should filter: give it everything and let it apply the window and the repeat checks.
+3. **Only the searches and pages the steps name.** No extra rounds "to reinforce" a section.
+4. **Step 7 always runs**, sentence by sentence, before the reply.
+5. **The final reply is the step 8 summary and nothing else**: no process, sources, network, script or newsstand details, and the Attention line names accounts only (no date, place or device).
+6. **`KEEP:` from `assemble.py` means stop**: never publish over a fuller edition without the reader's yes (step 6).
+
 ## When to read what
 
 | Situation | Read |
@@ -86,7 +97,7 @@ In the same block of calls:
 
 **No network** (the collection printed `NETWORK BLOCKED`): follow `references/no-network.md`. Claude gathers with web search and `collect.py --from-results` filters the results; from step 3 on everything is the same.
 
-**Extra research for the headline:** one web search with the headline's title plus the current month and year (collected links are Google News redirects that page fetchers cannot open). If every result is older than the date window, search once more in the more thorough search mode, when the tool has one. Keep the headline's `ref` and add the `url` and `outlet` of the page whose facts you used, so the printed source is the one behind the numbers (`references/edition-format.md`).
+**Extra research for the headline:** one web search with the headline's title plus the current month and year (collected links are Google News redirects that page fetchers cannot open). If every result is older than the date window, search once more in the more thorough search mode, when the tool has one. Then open the best result's page: only what that page says can be added to the headline beyond the collected title and summary (rule 1). If no page opens, the headline text says only what the collected title, summary and result snippets say, in fewer sentences. Keep the headline's `ref` and add the `url` and `outlet` of the page whose facts you used, so the printed source is the one behind the numbers (`references/edition-format.md`).
 
 **Secondary stories are not researched:** their 1–2 sentences come from title and summary. One exception: when the title does not name what it is about ("a free city-builder on Steam", "a farming sim announced"), one search only to find that name, at most twice per edition. Not found: leave the story out.
 
@@ -138,7 +149,9 @@ Visual check only in an interactive session and only if Playwright with Chromium
 
 ### 6. Publish to the newsstand
 
-Follow `references/archive.md` ("Adding today's edition"). Publish exactly the files `assemble.py` listed, from disk, in patch mode. Single page: publish the one file it printed ("Single page" in `references/archive.md`). Only the newspaper: skip this step (`references/modes.md`).
+Follow `references/archive.md` ("Adding today's edition"). Publish exactly the files `assemble.py` listed, from disk, in patch mode.
+
+`KEEP:` instead of `OK:` means today's edition is already published with more stories than this reissue, and nothing was written. Scheduled run: publish nothing, and the reply is the normal summary of the published edition. Interactive run: ask the reader in one line whether to replace it; only on a yes, rerun with `--replace` and publish. Single page: publish the one file it printed ("Single page" in `references/archive.md`). Only the newspaper: skip this step (`references/modes.md`).
 
 ### 7. Final check (what the script cannot see)
 
@@ -153,6 +166,7 @@ Follow `references/archive.md` ("Adding today's edition"). Publish exactly the f
 - First run (just after setup): the summary described at the end of `references/setup.md`.
 - Single page, first edition: add one sentence saying there is no newsstand because this app keeps one page per artifact, so each edition replaces the previous one in the same private page, where the settings are kept too. Later editions: the normal summary.
 - Only the newspaper: send the HTML file the script printed, with one sentence on why there is no newsstand and, for a copy to share, what was left out.
+- Interactive reissue stopped by `KEEP:`: one line saying today's edition is already at the newsstand with more stories, and the question whether to replace it. Nothing else.
 - Every other run, scheduled or interactive: the session's final reply is always shown to the reader, so it is the **edition summary** below and nothing else. Send no other messages.
 
 **Edition summary.** At most four lines, in `config.language`, with the labels translated (pt-BR: "Atenção", "Faltando"; es: "Atención", "Falta"). Each line appears only when it has something to say:
@@ -165,7 +179,7 @@ Follow `references/archive.md` ("Adding today's edition"). Publish exactly the f
 ```
 
 1. Always: the edition number and today's headline (the artifact card already shows the link).
-2. **Attention:** only what asks the reader to act. Today that means security alert emails (new sign-in, password change): how many and which accounts, never codes, links or details.
+2. **Attention:** only what asks the reader to act. Today that means security alert emails (new sign-in, password change): how many and which accounts, never codes, links, dates, places, devices or other details.
 3. **Missing:** only when Calendar or Gmail is not connected or failed after the second try, or the weather or a whole section came out empty. One line, plain words, no technical details.
 4. 📅 Only in an interactive run, only when this session has a scheduled-task tool, and only when no scheduled task runs this newspaper (check when the tools can list them). Without a scheduled-task tool there is no 📅 line.
 
