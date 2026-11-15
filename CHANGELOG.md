@@ -2,6 +2,11 @@
 
 All notable changes to Morning Newspaper. Each release on GitHub uses the matching section below as its notes.
 
+## v1.5.1 — 2026-11-15
+
+### Changed
+- **Shorter SKILL.md.** It now holds only what every edition needs: a nine-step overview of a normal day, a "when to read what" table and steps 0 to 8. The rarer cases move to their own files, read only when they happen: `references/modes.md` (missing tools, only the newspaper, no folder to write in), `references/scheduling.md` and `references/no-network.md` (with the results file format, moved out of `edition-format.md`). Nothing in the rules changed; SKILL.md went from about 22 KB to 17 KB.
+
 ## v1.5.0 — 2026-11-15
 
 From the first run in the Claude mobile app (a separate account, no newsstand, shell network blocked).
