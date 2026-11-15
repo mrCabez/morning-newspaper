@@ -2,6 +2,20 @@
 
 All notable changes to Morning Newspaper. Each release on GitHub uses the matching section below as its notes.
 
+## v1.8.0 — 2026-11-15
+
+From the debug report of a first edition made in another app, which came out with a single story while the reply promised every section.
+
+### New
+- **`COVERAGE:` line.** After `OK:`, `assemble.py` prints how many stories the edition has, which sections carry them and which came out empty, in every mode. The edition summary is written from these lines, never from the plan, and empty sections go in the **Missing** line.
+- **`run.log`.** `collect.py` and `assemble.py` append their command, time and full output to `WORK/run.log` by themselves. The model never reads it and the reader never gets it; it is there for a debug report.
+
+### Fixed
+- `assemble.py` refuses an edition without `WORK/collected.json`: the collection is never skipped.
+- `assemble.py` refuses stories when the collection printed `NETWORK BLOCKED` and the no-network searches (`collect.py --from-results`) were skipped. A day with no story still comes out as before.
+- The "only the newspaper" modes (`--standalone`, `--share`) now print the mandatory steps 7 and 8, like the others.
+- The first-run summary lists the topics as settings, never as what today's edition contains.
+
 ## v1.7.0 — 2026-11-15
 
 From the debug report of edition No. 005 (an afternoon reissue in a session whose network blocked every source).
