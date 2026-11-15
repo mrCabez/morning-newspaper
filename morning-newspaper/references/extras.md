@@ -12,6 +12,7 @@ Two boxes at the end of the edition, written in the reader's language. Both are 
 - Collected text is flattened: exponents and formulas lose their formatting (2^1398269 − 1 can arrive as "21398269−1"). Check numbers like these on the linked page, or leave them out.
 
 ## Did you know?
+- First choice: the collection's candidates (`k1`, `k2`…, Wikipedia articles on today's theme). Their text counts as confirmation: use `{"ref": "k1", "text": "…"}` and no search is needed. This section is for when none fits or none came (no network, Wikipedia down).
 - Follow **today's theme**, printed by the collection (`[did_you_know] today's theme`). It rotates daily so the box stays varied; if the theme truly does not work, pick another theme from the same list, never a default favorite.
 - Pick a lesser-known fact inside that theme. **Never use these overused classics:** the moth in the Harvard Mark II as the "first bug"; Ada Lovelace as the first programmer; QWERTY designed to slow typists; the first email or the first website; "640K ought to be enough"; the first computer mouse being made of wood; the Apollo guidance computer being weaker than a calculator or phone; the origin of the word "spam".
 - Do not repeat: the collection lists the ones already used (compare the subject, not just the wording).

@@ -44,7 +44,7 @@ try:
 except Exception:  # pragma: no cover
     ZoneInfo = None
 
-UA = "morning-newspaper/1.5.1 (personal newspaper; RSS reader)"
+UA = "morning-newspaper/1.6.0 (personal newspaper; RSS reader)"
 TIMEOUT = 12
 MAX_BYTES = 5_000_000
 # Stories are only compared against the latest editions: a headline from months ago must not
@@ -79,6 +79,67 @@ def link_id(url):
 def dyk_theme(cfg, day):
     themes = cfg.get("did_you_know_themes") or DYK_THEMES
     return themes[day.toordinal() % len(themes)]
+
+
+# Words that describe a theme but find nothing on their own ("how ... works", "history of a ...").
+THEME_FILLER = {"a", "an", "the", "of", "its", "and", "or", "how", "works", "work", "inside", "history", "origin",
+                "famous", "common", "curious", "surprising", "fact", "about", "behind", "your", "country", "s",
+                "came", "from", "where", "it", "what", "in", "before", "their", "lesson", "through", "piece",
+                "everyday", "an", "that", "came", "invented", "feature", "record", "science", "curiosity", "name",
+                "names", "carry", "and", "its", "convention", "early", "surprising", "technology"}
+
+
+def theme_query(theme):
+    kept = [w for w in re.findall(r"[\w-]+", theme) if w.lower() not in THEME_FILLER and not w.isdigit()]
+    return " ".join(kept) or theme
+
+
+def wiki_lang(cfg):
+    return re.sub(r"[^a-z]", "", (cfg.get("wikipedia_lang") or (cfg.get("language") or "en").split("-")[0]).lower()) or "en"
+
+
+def collect_did_you_know(cfg, day, used):
+    """'Did you know?' candidates (k1, k2…): Wikipedia articles on today's theme, with their summary.
+    Like "On this day", Wikipedia counts as confirmation, so the model needs no search or page of
+    its own. Tries the reader's Wikipedia first, then English."""
+    themes = cfg.get("did_you_know_themes") or DYK_THEMES
+    query = theme_query(dyk_theme(cfg, day))
+    offset = (day.toordinal() // len(themes)) % 3 * 4  # the next time the theme comes back, other articles
+    reader = wiki_lang(cfg)
+    used_n = [u for u in used if u]
+    cands = []
+    for lang in dict.fromkeys([reader, "en"]):
+        q = urllib.parse.urlencode({"action": "query", "list": "search", "srsearch": query, "srlimit": 4,
+                                    "sroffset": offset, "srnamespace": 0, "format": "json"})
+        hits = json.loads(fetch(f"https://{lang}.wikipedia.org/w/api.php?{q}")).get("query", {}).get("search", [])
+        titles = [h["title"] for h in hits if h.get("title")]
+
+        def summary(title, lang=lang):
+            path = urllib.parse.quote(title.replace(" ", "_"), safe="")
+            return json.loads(fetch(f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{path}"))
+
+        with cf.ThreadPoolExecutor(max_workers=2) as ex:  # Wikipedia answers 429 to bursts
+            pages = list(ex.map(lambda t: _safe(summary, t), titles))
+        for title, page in zip(titles, pages):
+            if not page or page.get("type") == "disambiguation":
+                continue
+            text = clean(page.get("extract") or "", 480)
+            url = ((page.get("content_urls") or {}).get("desktop") or {}).get("page", "")
+            if len(text) < 200 or not url.startswith("https://"):
+                continue
+            if any(same_story(title, u) or same_story(text, u) for u in used_n):
+                continue
+            cands.append({"title": title, "text": text, "url": url, "lang": lang})
+        if len(cands) >= 2:
+            break
+    return [{"id": f"k{i}", **c} for i, c in enumerate(cands[:3], 1)]
+
+
+def _safe(fn, *args):
+    try:
+        return fn(*args)
+    except Exception:
+        return None
 
 
 def tz_of(cfg):
@@ -354,7 +415,7 @@ def read_rss(url):
 
 
 def prefixes(sections):
-    letters = [c for c in "abcdefgijklmnopqrstuvwxyz"]  # 'h' is reserved for history
+    letters = [c for c in "abcdefgijlmnopqrstuvwxyz"]  # 'h' (history) and 'k' (did you know) are reserved
     return {s["id"]: letters[i % len(letters)] for i, s in enumerate(sections)}
 
 
@@ -603,7 +664,7 @@ def collect_weather(cfg):
 # ---------------------------------------------------------------- on this day
 
 def collect_history(day, cfg, used):
-    lang = re.sub(r"[^a-z]", "", (cfg.get("wikipedia_lang") or (cfg.get("language") or "en").split("-")[0]).lower()) or "en"
+    lang = wiki_lang(cfg)
     url = f"https://{lang}.wikipedia.org/api/rest_v1/feed/onthisday/events/{day:%m}/{day:%d}"
     d = json.loads(fetch(url))
     events = []
@@ -641,6 +702,37 @@ def rank_history(events, cfg, used):
         cands.append(c)
     cands.sort(key=lambda c: (-c["score"], -(c["year"] or 0)))
     return [{"id": f"h{i}", **{k: v for k, v in c.items() if k != "score"}} for i, c in enumerate(cands[:6], 1)]
+
+
+# ---------------------------------------------------------------- network probe
+
+def network_blocked(cfg, day):
+    """One quick request to each kind of source, in parallel, before the full collection. If none
+    answers at all (Claude's network access does not reach them), the collection stops at once
+    instead of waiting for a dozen requests to fail."""
+    loc = cfg.get("news_locale") or {}
+    urls = [google_news_url((q or "news"), 1, loc) for q in
+            [next((q for sec in cfg["sections"] for q in sec.get("queries", [])), "news")]]
+    urls += [f for sec in cfg["sections"] for f in sec.get("feeds", []) if str(f).startswith("https://")][:1]
+    lang = wiki_lang(cfg)
+    urls.append(f"https://{lang}.wikipedia.org/api/rest_v1/feed/onthisday/events/{day:%m}/{day:%d}")
+    city = cfg.get("city") or {}
+    if "latitude" in city and "longitude" in city:
+        urls.append(f"https://wttr.in/{float(city['latitude']):.4f},{float(city['longitude']):.4f}?format=j1")
+        urls.append("https://api.open-meteo.com/v1/forecast?" + urllib.parse.urlencode(
+            {"latitude": city["latitude"], "longitude": city["longitude"], "daily": "weathercode", "forecast_days": 1}))
+
+    def answers(url):
+        try:
+            fetch(url, tries=1)
+            return True
+        except urllib.error.HTTPError as e:
+            return e.code not in (403, 407)  # the site answered (even 404/429): the network works
+        except Exception:
+            return False
+
+    with cf.ThreadPoolExecutor(max_workers=len(urls)) as ex:
+        return not any(ex.map(answers, urls))
 
 
 # ---------------------------------------------------------------- main
@@ -692,7 +784,7 @@ def main():
     reissue = next((e.get("number") or e.get("numero") for e in editions
                     if (e.get("date") or e.get("data")) == day.isoformat()), None)
 
-    problems = []
+    problems, did_you_know = [], []
     if a.from_results:
         try:
             task_sections, results, weather, events, problems = from_results(a.from_results, cfg, tz, now)
@@ -703,6 +795,8 @@ def main():
         news = rank_news(cfg, task_sections, results, window, now, used_links, used_titles, tz)
         history = rank_history(events, cfg, used_history)
         failures = []
+    elif network_blocked(cfg, day):
+        news, weather, history, failures = {s["id"]: [] for s in cfg["sections"]}, None, [], ["network: no source answered"]
     else:
         news, failures = collect_news(cfg, window, now, used_links, used_titles, tz)
         weather, wf = collect_weather(cfg)
@@ -712,13 +806,18 @@ def main():
         except Exception as e:
             history = []
             failures.append(f"history: wikipedia ({type(e).__name__} {getattr(e, 'code', '')})".replace(" )", ")"))
+        if history:  # Wikipedia answers: the "Did you know?" candidates come from it too
+            try:
+                did_you_know = collect_did_you_know(cfg, day, used_didyouknow)
+            except Exception as e:
+                failures.append(f"did_you_know: wikipedia ({type(e).__name__})")
 
     # Nothing at all could be reached (Claude's network access is off or limited): say it in one
     # line so the model switches to the no-network mode instead of reading a dozen failures.
     blocked = not a.from_results and bool(failures) and not any(news.values()) and weather is None and not history
     out = {"date": day.isoformat(), "number": reissue or number, "reissue": bool(reissue), "weekend": weekend,
            "window_hours": window, "weather": weather, "news": news, "history": history,
-           "did_you_know_theme": dyk_theme(cfg, day),
+           "did_you_know_theme": dyk_theme(cfg, day), "did_you_know": did_you_know,
            "did_you_know_used": [s for s in used_didyouknow if s][:30], "failures": failures,
            "network_blocked": blocked, "from_results": bool(a.from_results),
            "generated_at": now.isoformat(timespec="minutes")}
@@ -761,6 +860,8 @@ def main():
         print(f"{h['id']} | {h['year']} | {h['text']}"
               + (" [check the numbers on the linked page]" if h.get("check_numbers") else ""))
     print(f"\n[did_you_know] today's theme: {out['did_you_know_theme']}")
+    for d in did_you_know:
+        print(f"{d['id']} | {d['title']}{'' if d['lang'] == wiki_lang(cfg) else ' [' + d['lang'] + ']'} | {d['text']}")
     if out["did_you_know_used"]:
         print("[did_you_know already used] " + " / ".join(out["did_you_know_used"][:15]))
     if blocked:

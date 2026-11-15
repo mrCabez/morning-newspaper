@@ -2,10 +2,10 @@
 
 Read when the collection printed `NETWORK BLOCKED`: Claude's network access does not reach the sources (some apps let the shell reach only a list of hosts). Gather with the web tools, which still work, and let the script do the filtering. Tell the reader nothing about it.
 
-1. One web search per section (two for the section with the most `count`), built from its `queries` plus the current month and year.
-2. Weather: the app's weather tool if there is one (it has no page: give `source`, no `url`), else one web search. "On this day": fetch the Wikipedia page for today's date in `wikipedia_lang` (`https://en.wikipedia.org/wiki/November_15`, `https://pt.wikipedia.org/wiki/15_de_novembro`, `https://es.wikipedia.org/wiki/15_de_noviembre`) and take 6–10 events from its events section.
+1. **All in one block of calls**, in parallel: one web search per section (two for the section with the most `count`), built from its `queries` plus the current month and year; the weather (the app's weather tool if there is one, else one search); and one search for today's date in history in the reader's language ("15 de novembro na história", "November 15 in history"). Never open a Wikipedia date page: it is very long.
+2. Weather from the app's tool has no page: give `source`, no `url`. History: take the dated events from the results' snippets, each with the link of the result it came from (prefer Wikipedia or an encyclopedia). "Did you know?" has no candidates in this mode: `references/extras.md`, at most one search and one page.
 3. Write every result to `WORK/results.json` (format below): title, link, outlet, the date when the result shows one, a short snippet. Leave nothing out on your own: the script applies the date window, the repeat checks and the `avoid` list.
-4. Run `python3 SKILL/scripts/collect.py --config WORK/config.json --work WORK --index WORK/index.json --from-results WORK/results.json`. It prints the same summary as a normal collection, with IDs: from here on use `ref` as usual. A story flagged `date?` came without a date: open it (or search its title) to confirm it is inside the window before using it.
+4. Run `python3 SKILL/scripts/collect.py --config WORK/config.json --work WORK --index WORK/index.json --from-results WORK/results.json`. It prints the same summary as a normal collection, with IDs: from here on use `ref` as usual. A story flagged `date?` came without a date: confirm it is inside the window before using it, with one search of its title (not by opening the page), and only for stories you would print.
 
 ## The results file
 

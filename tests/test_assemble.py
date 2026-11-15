@@ -697,3 +697,16 @@ def test_unpack_state_accepts_the_whole_page_and_refuses_garbage(assembler, tmp_
 def test_only_one_output_mode(assembler):
     proc = assembler.run("--single-page", "--standalone")
     assert proc.returncode != 0
+
+
+def test_did_you_know_from_a_collected_candidate(assembler):
+    """v1.6.0: a k ref brings its Wikipedia link, so no search or page is needed."""
+    assembler.collected["did_you_know"] = [{"id": "k1", "title": "Alpha", "text": "…",
+                                            "url": "https://en.wikipedia.org/wiki/Alpha", "lang": "en"}]
+    assembler.edition["did_you_know"] = {"ref": "k1", "text": "The first version ran on a single machine."}
+    ok(assembler.run())
+    assert "https://en.wikipedia.org/wiki/Alpha" in assembler.page()
+    import shutil
+    shutil.rmtree(assembler.tmp / "work" / "archive")
+    assembler.edition["did_you_know"] = {"ref": "a1", "text": "A news ref is not a candidate."}
+    assert "not a 'Did you know?' candidate" in refused(assembler.run()).stdout

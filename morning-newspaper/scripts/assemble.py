@@ -347,6 +347,7 @@ def build():
             collected = json.load(f)
     refs = {n["id"]: n for lst in (collected.get("news") or {}).values() for n in lst}
     refs.update({h["id"]: h for h in collected.get("history") or []})
+    refs.update({d["id"]: d for d in collected.get("did_you_know") or [] if isinstance(d, dict) and "id" in d})
     L = load_labels(a.skill, cfg)
     bad_labels = label_errors(L)
     if bad_labels:
@@ -531,6 +532,12 @@ def build():
                           if base else f"history: ref {hist['ref']} is not in collected.json")
         else:
             hist.setdefault("url", base.get("url", ""))
+    dyk_ids = {x["id"] for x in collected.get("did_you_know") or [] if isinstance(x, dict) and "id" in x}
+    if dyk.get("ref"):
+        if dyk["ref"] not in dyk_ids:
+            errors.append(f"did_you_know: ref {dyk['ref']} is not a 'Did you know?' candidate (k1, k2…)")
+        else:
+            dyk.setdefault("url", refs[dyk["ref"]].get("url", ""))
     if dyk.get("text") and not str(dyk.get("url", "")).startswith("https://"):
         errors.append("did_you_know: missing the https link of the page that confirmed it (no confirmed page: leave it out)")
     for where, box in (("history", hist), ("did_you_know", dyk)):

@@ -640,3 +640,55 @@ def test_result_dates(collect_module, txt, day_only):
     when, only = collect_module.result_date(txt, tz, dt.datetime(2026, 11, 15, 12, 0, tzinfo=tz))
     assert only is day_only
     assert (when is None) is (txt == "")
+
+
+# ---------------------------------------------------------------- v1.6.0: speed and tokens
+
+def test_blocked_network_stops_after_the_probe(tmp_path, config):
+    """When nothing answers, only the quick probe runs: no full collection waiting on every source."""
+    proc, out = run_collect(tmp_path, config,
+                            "CALLS = []\n"
+                            "def no_net(req, timeout=None):\n"
+                            "    CALLS.append(req.full_url)\n"
+                            "    raise urllib.error.URLError('blocked')\n"
+                            "urllib.request.urlopen = no_net\n"
+                            "import atexit\n"
+                            "atexit.register(lambda: print('CALLS', len(CALLS)))\n")
+    assert "NETWORK BLOCKED" in proc.stdout and out["network_blocked"] is True
+    calls = int(proc.stdout.rsplit("CALLS", 1)[1])
+    assert calls <= 5, calls
+
+
+def test_proxy_403_counts_as_blocked_but_a_404_does_not(collect_module, offline, config):
+    day = dt.date(2026, 11, 13)
+    import urllib.error as ue
+    offline["news.google.com"] = ue.HTTPError("u", 403, "blocked", {}, None)
+    offline["wikipedia.org"] = ue.HTTPError("u", 403, "blocked", {}, None)
+    offline["wttr.in"] = ue.HTTPError("u", 403, "blocked", {}, None)
+    offline["open-meteo.com"] = ue.HTTPError("u", 403, "blocked", {}, None)
+    assert collect_module.network_blocked(config, day) is True
+    offline["wikipedia.org"] = ue.HTTPError("u", 404, "not found", {}, None)
+    assert collect_module.network_blocked(config, day) is False
+
+
+def test_theme_query_keeps_the_subject(collect_module):
+    assert collect_module.theme_query("how GPS, Wi-Fi or Bluetooth works") == "GPS Wi-Fi Bluetooth"
+    assert collect_module.theme_query("history of a famous algorithm") == "algorithm"
+
+
+def test_did_you_know_candidates_from_wikipedia(collect_module, offline, config):
+    long_text = "The protocol was designed in 1982 for a small network of universities. " * 4
+    offline["/w/api.php"] = json.dumps({"query": {"search": [{"title": "Alpha"}, {"title": "Beta"},
+                                                             {"title": "Gamma"}, {"title": "Delta"}]}})
+    offline["summary/Alpha"] = json.dumps({"type": "standard", "extract": long_text,
+                                           "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Alpha"}}})
+    offline["summary/Beta"] = json.dumps({"type": "disambiguation", "extract": long_text,
+                                          "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Beta"}}})
+    offline["summary/Gamma"] = json.dumps({"type": "standard", "extract": "Too short.",
+                                           "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Gamma"}}})
+    offline["summary/Delta"] = json.dumps({"type": "standard", "extract": long_text.replace("1982", "1977"),
+                                           "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Delta"}}})
+    cands = collect_module.collect_did_you_know(config, dt.date(2026, 11, 13), used=[])
+    assert [c["title"] for c in cands] == ["Alpha", "Delta"]
+    assert cands[0]["id"] == "k1" and cands[0]["url"].startswith("https://")
+    assert len(cands[0]["text"]) <= 480

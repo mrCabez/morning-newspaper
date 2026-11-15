@@ -141,3 +141,12 @@ def test_skill_md_points_to_every_reference():
         assert f"references/{ref.name}" in table, ref.name
     for moved in ("## Scheduling", "### Only the newspaper", "| Missing tool |"):
         assert moved not in text, moved
+
+
+def test_step_4_has_the_essentials():
+    """v1.6.0: a normal edition writes the JSON without reading writing.md or edition-format.md."""
+    text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+    step4 = text[text.index("### 4. Write the JSON"):text.index("### 5. Assemble")]
+    for must in ('"headline"', '"did_you_know": {"ref": "k', "up to 14 words", "under 15 words", "references/edition-format.md"):
+        assert must in step4, must
+    assert "Read `references/writing.md`" not in step4

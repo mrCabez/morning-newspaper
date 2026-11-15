@@ -10,10 +10,10 @@ A personal newspaper delivered every morning, readable in five minutes with a co
 ## A normal day, in short
 
 0. Choose the mode from the session's tools (step 0).
-1. Find the newsstand; save its `config.json` and `editions/index.json` into WORK.
+1. Find the newsstand; save its `config.json` and `editions/index.json` into WORK (steps 0 and 1 in the same round of calls).
 2. In one block of calls: `collect.py`, the agenda and Gmail.
 3. Pick the stories.
-4. Read `references/writing.md` and `references/edition-format.md`; write `WORK/edition.json`.
+4. Write `WORK/edition.json` (the essentials are in step 4 below).
 5. Run `assemble.py`; fix any `ERROR:`.
 6. Publish exactly the files it listed.
 7. Check every sentence against its source.
@@ -21,18 +21,20 @@ A personal newspaper delivered every morning, readable in five minutes with a co
 
 Gathering, building the HTML, the index and the mechanical checks are done by the scripts: you read a compact summary, choose, write a short JSON and publish. The details of each step are below; read other files only when the table says so.
 
+**Every call costs the whole conversation again**, so fewer rounds matter more than shorter answers: send independent calls together in one block (the artifact list and reads; the collection, agenda and email; all fallback searches), read only the files the table asks for, and open a web page only when a rule below says so.
+
 ## When to read what
 
 | Situation | Read |
 | --- | --- |
 | Steps 1 and 6: finding and publishing to the newsstand or the single page | `references/archive.md` |
-| Step 4, before writing | `references/writing.md`, `references/edition-format.md` |
+| Step 4: only for a field or case the essentials there do not cover, or an `ERROR:` you cannot fix from its message | `references/writing.md`, `references/edition-format.md` |
 | A tool is missing, or the reader wants only the newspaper, a test or a copy to share | `references/modes.md` |
 | The collection printed `NETWORK BLOCKED` | `references/no-network.md` |
 | No config yet, or the reader wants to change it | `references/setup.md` (model: `references/config.example.json`) |
 | Scheduled run that finds no config | `references/sample.md` |
 | The reader asks for a daily schedule, or chose a time in setup | `references/scheduling.md` |
-| "On this day" came back empty, and for "Did you know?" | `references/extras.md` |
+| "On this day" came back empty, or no "Did you know?" candidate (`k1`…) fits | `references/extras.md` |
 | The reader asks about approvals, or a scheduled run gets stuck | `references/permissions.md` |
 | The request is to change the look | `references/style.md`, `assets/*` |
 | Never during an edition | `scripts/collect.py`, `scripts/assemble.py` (just run them) |
@@ -56,7 +58,7 @@ If no folder can be created there, see `references/modes.md` ("No folder to writ
 
 ### 0. Choose the mode (before anything else)
 
-Look at the tools this session has, once, and decide; never discover it halfway through the edition:
+Look at the tools this session has, once, and decide; never discover it halfway through the edition. In the same round of calls start step 1 (search the artifacts for the newsstand):
 - **Where the edition goes:** the artifact tools publish several files from disk to one artifact (a list of files, patch mode) → **newsstand**. They publish only one HTML page per artifact → **single page** (`references/archive.md`, "Single page"). No artifact tools, or the reader asked for a copy or a test → **only the newspaper** (`references/modes.md`). Not sure about several files: plan the newsstand; if publishing refuses several files, switch to the single page (`references/archive.md`).
 - **Agenda:** Google Calendar, else the phone's or app's own calendar tool, else not connected. **Email:** Gmail or not connected. **Weather:** the collection, else the app's weather tool, else one web search.
 - **Schedule:** whether a scheduled-task tool exists (it decides the 📅 line in step 8).
@@ -103,11 +105,27 @@ Use each section's `interest` and `count` from the config:
 - Headline: the story most relevant to the reader today (affects what they do, use or decide).
 - A section with nothing good is left out. Never pad with weak or invented stories. The local section first gets one more search for the region (a neighbouring town, or the region with its state) and is left out only if that brings nothing either.
 - Unverifiable claims (only small outlets, nothing confirms it) are written as "outlets report…", or left out.
-- "On this day": pick one `h` (it comes from Wikipedia, which counts as confirmation). "Did you know?": follow today's theme from the collection and `references/extras.md` (never the overused classics listed there).
+- "On this day": pick one `h` (it comes from Wikipedia, which counts as confirmation).
+- "Did you know?": pick one `k` (Wikipedia articles on today's theme; their text counts as confirmation) and tell one lesser-known, concrete fact from its text, in 1–2 sentences. Not a definition, and never these overused classics: the moth "first bug", Ada Lovelace as first programmer, QWERTY made to slow typists, the first email or website, "640K", the wooden first mouse, Apollo's computer vs a phone, the origin of "spam". No `k` holds such a fact (or none came): `references/extras.md`.
 
 ### 4. Write the JSON
 
-Read `references/writing.md` and `references/edition-format.md`. Write `WORK/edition.json` with the file-writing tool, in the reader's language. Use `ref` for everything that came from the collection: never copy URLs.
+Write `WORK/edition.json` with the file-writing tool, in the reader's language, like a good newsroom of a 1980s–90s daily: clear and direct, no slang, exclamation marks or emoji, no humor in the news.
+
+```json
+{"headline": {"ref": "a4", "title": "…", "deck": "…", "text": "…", "icon": "chip"},
+ "agenda": [{"time": "8:00", "event": "…"}], "classifieds": [{"text": "…", "url": "https://mail.google.com/mail/u/0/#inbox/ID"}],
+ "sections": {"tech": [{"ref": "a6", "title": "…", "text": "…"}]},
+ "history": {"ref": "h1", "text": "In 1969, …"}, "did_you_know": {"ref": "k2", "text": "…"},
+ "weather_condition": "only if the collected condition is in another language"}
+```
+
+- `ref` for everything collected: never copy URLs. Headline researched elsewhere: keep `ref` and add `url` and `outlet` of the page whose facts you used.
+- Headline: up to 14 words, present tense, main fact first. `deck`: one sentence with a consequence the sources state, never advice. `text`: 3–4 sentences, the first says what, who and when. `icon`: `lock`, `chip`, `coin`, `chart`, `gamepad`, `city`, `robot` or `newspaper`.
+- Section stories: title up to 12 words, text 1–2 sentences. With an empty summary, only restate the title's fact.
+- Agenda: one line per event, the reader's time format; all-day events use the language's "all day" label; empty day → `[]`. Classifieds: one sentence in your own words saying who asked, when and what; no amounts, codes or health data; already answered → `"tag"` with the `resolved` label, or drop it. Connector not connected → leave the key out; failed twice → `"agenda_error"` / `"classifieds_error"` (step 2).
+- Everything in your own words; at most one literal quote per source, under 15 words. No fact, number, nationality or adjective that the collected text, a search made in this run or the Wikipedia text does not carry. No investment advice, no orders to the reader, no apologies, no narrating the process.
+- Anything else (fallback stories without `ref`, the weather object, `week` on Sundays, `prep_note`, `band`): `references/edition-format.md`.
 
 ### 5. Assemble and check
 

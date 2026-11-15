@@ -13,7 +13,7 @@ The only text you write per edition, in the reader's language. `scripts/assemble
     "local": [{"ref": "b2", "title": "...", "text": "..."}]
   },
   "history": {"ref": "h1", "text": "In 2020, ..."},
-  "did_you_know": {"text": "...", "url": "https://source-that-confirmed-it"},
+  "did_you_know": {"ref": "k1", "text": "..."},
   "weather_condition": "optional: the condition translated into the reader's language",
   "week": ["Sundays only, optional: 3 lines"]
 }
@@ -24,7 +24,7 @@ Rules:
 - `security_alert`: not used since v1.4.2 (security alerts go in the **Attention** line of the edition summary, SKILL.md step 8). Still accepted, so older edition files build: it adds one neutral line to the classifieds box.
 - The classifieds box is printed every day when Gmail was read, weekends included: an empty list prints "inbox up to date".
 - `history` uses an "On this day" candidate (`h1`, `h2`…), never a news ref. Without a collected `h` ref (fallback search): `{"text": "In 1969, ...", "url": "https://source"}`.
-- `did_you_know` always carries the `url` of the page that confirmed it; nothing confirmed, leave it out.
+- `did_you_know`: a collected candidate (`"ref": "k1"`), or, without one, `{"text": "...", "url": "https://page-that-confirmed-it"}`; nothing confirmed, leave it out.
 - Keys under `sections` are the section `id`s from config.json. Missing or empty = the section is not printed.
 - `ref` is a collected ID (`a1`, `b3`, `h2`…). URL, outlet and date are filled in automatically. For a story found outside the collection (fallback search), replace `ref` with `"url": "https://..."` and `"outlet": "Name"`.
 - The headline's section label is taken from its `ref`; set `"section"` only to override it.

@@ -2,6 +2,19 @@
 
 All notable changes to Morning Newspaper. Each release on GitHub uses the matching section below as its notes.
 
+## v1.6.0 — 2026-11-15
+
+Faster editions that spend fewer tokens. In an agent session every call re-reads the whole conversation, so the work here is fewer rounds and less text pulled in.
+
+### New
+- **"Did you know?" candidates from the collection.** `collect.py` looks up Wikipedia articles on today's theme and prints them as `k1`, `k2`… with their summary. Like "On this day", the Wikipedia text counts as confirmation, so the usual one or two searches plus an opened page are gone. `"did_you_know": {"ref": "k1", "text": "…"}` fills in the link. The manual way (`references/extras.md`) stays for when no candidate fits.
+- **Quick network check.** Before the full collection, one request to each kind of source runs in parallel. If none answers, the collection stops at once with `NETWORK BLOCKED` instead of waiting for every source to fail.
+
+### Changed
+- **Step 4 carries its essentials.** The JSON skeleton and the writing rules a normal edition needs are now in SKILL.md, so `references/writing.md` and `references/edition-format.md` are read only for uncommon fields or an error. A normal edition now reads about a third less instruction text, in fewer calls.
+- **Fewer rounds.** Steps 0 and 1 go out together, the newsstand's file list and page are read in one round, and the no-network searches (sections, weather and history) go out in one parallel block.
+- **No-network "On this day"** comes from one search instead of opening the Wikipedia date page (very long), and a `date?` story is confirmed with one search of its title, only if it would be printed.
+
 ## v1.5.1 — 2026-11-15
 
 ### Changed
