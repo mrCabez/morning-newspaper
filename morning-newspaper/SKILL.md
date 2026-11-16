@@ -21,7 +21,7 @@ A personal newspaper delivered every morning, readable in five minutes with a co
 
 Gathering, building the HTML, the index and the mechanical checks are done by the scripts: you read a compact summary, choose, write a short JSON and publish. The details of each step are below; read other files only when the table says so.
 
-**Every call costs the whole conversation again**, so fewer rounds matter more than shorter answers: send independent calls together in one block (the artifact list and reads; the collection, agenda and email; all fallback searches), read only the files the table asks for, and open a web page only when a rule below says so.
+**Every call costs the whole conversation again**, so fewer rounds matter more than shorter answers: send independent calls together in one block (the artifact list and reads; the collection, agenda and email; all fallback searches), read only the files the table asks for, and open a web page only when a rule below says so. Load only the tool schemas you are about to call (e.g. Gmail's search; the tool that opens a conversation only when one must be opened).
 
 ## Rules that are never optional
 
@@ -61,7 +61,7 @@ These instructions are in English, but the newspaper is not. **Always work in th
 
 ## Edition flow
 
-Say in one line that the edition takes a few minutes. In a scheduled run nobody is watching: ask nothing, decide and go on.
+Interactive run: say in one line that the edition takes a few minutes. Scheduled run: send nothing before the step 8 summary (not even that line), ask nothing, decide and go on; a task prompt that says "send no messages" means exactly this.
 
 Working folder: `newspaper/YYYY-MM-DD/` inside the session's current working folder (`pwd`), dated in the reader's timezone (WORK below). Skill folder: SKILL. Never a folder elsewhere such as `~/newspaper/`: the publishing tool only takes files from the working folder or the session's temporary folder. If the publishing tool names the one folder it reads files from (e.g. `/mnt/user-data/outputs/`), put `newspaper/YYYY-MM-DD/` inside that folder instead.
 
@@ -90,14 +90,14 @@ Follow `references/archive.md` ("Finding the newsstand"). From it, save `config.
 
 In the same block of calls:
 - **Script:** `python3 SKILL/scripts/collect.py --config WORK/config.json --work WORK --index WORK/index.json` (omit `--index` if there is none). It prints the date, issue number, weather, candidate stories per section with short IDs (`a1`, `b2`…), "On this day" candidates (`h1`…) and a `FAILURES` line if a source did not answer. It already applies the date window (48 h; 72 h on Mondays and weekends), drops stories used in the last 14 editions and anything matching the reader's `avoid` list, and takes turns between a section's searches so the candidates cover all of them.
-- **Agenda (Google Calendar, or the phone's or app's calendar tool):** one listing from today 00:00 to tomorrow 23:59, primary calendar only (with a phone calendar, the reader's own calendars). Tomorrow's events only feed an optional preparation note. A successful answer with no `items` field means no events; a failed call is not a free day (see below).
-- **Email (Gmail):** one search: `in:inbox newer_than:2d -category:promotions -category:social -category:updates -category:forums -from:me` (`newer_than:3d` on Saturdays, Sundays and Mondays, like the news window). Open (once each) only conversations that seem to ask the reader for something; if the reader already replied, it becomes "resolved" or is dropped. Automatic notifications are never classifieds. A security alert (new sign-in, password change) never goes in the paper: it goes in the **Attention** line of the edition summary (step 8), in scheduled runs too.
+- **Agenda (Google Calendar, or the phone's or app's calendar tool):** one listing from today 00:00 to tomorrow 23:59 in the reader's timezone, primary calendar only, named explicitly when the tool takes a calendar id (`primary`); with a phone calendar, the reader's own calendars. Tomorrow's events only feed an optional preparation note. A successful answer with no `items` field means no events; a failed call is not a free day (see below).
+- **Email (Gmail):** one search: `in:inbox newer_than:2d -category:promotions -category:social -category:updates -category:forums -from:me` (`newer_than:3d` on Saturdays, Sundays and Mondays, like the news window). Open (once each) only conversations that seem to ask the reader for something, and those with several messages whose shown message does not settle what they are (a listing may show only the latest message); if the reader already replied, it becomes "resolved" or is dropped. Automatic notifications are never classifieds. A security alert (new sign-in, password change) never goes in the paper: it goes in the **Attention** line of the edition summary (step 8), in scheduled runs too.
 
 **Fallback, only when something is missing:** if a section failed in the script (`FAILURES`) and came back empty, do one web search for it with the current month and year. Weather unavailable: one search for today's forecast in the reader's city; without a reliable result, `"weather": false`.
 
 **No network** (the collection printed `NETWORK BLOCKED`): follow `references/no-network.md`. Claude gathers with web search and `collect.py --from-results` filters the results; from step 3 on everything is the same.
 
-**Extra research for the headline:** one web search with the headline's title plus the current month and year (collected links are Google News redirects that page fetchers cannot open). If every result is older than the date window, search once more in the more thorough search mode, when the tool has one. Then open the best result's page: only what that page says can be added to the headline beyond the collected title and summary (rule 1). If no page opens, the headline text says only what the collected title, summary and result snippets say, in fewer sentences. Keep the headline's `ref` and add the `url` and `outlet` of the page whose facts you used, so the printed source is the one behind the numbers (`references/edition-format.md`).
+**Extra research for the headline:** one web search with the headline's title plus the current month and year (collected links are Google News redirects that page fetchers cannot open). If the results are older than the date window or are about something else (another case, another institution), search once more in the more thorough search mode, when the tool has one, with the full name of who the story is about instead of an acronym. Then open the best result's page: only what that page says can be added to the headline beyond the collected title and summary (rule 1). If no page opens, the headline text says only what the collected title, summary and result snippets say, in fewer sentences. Keep the headline's `ref` and add the `url` and `outlet` of the page whose facts you used, so the printed source is the one behind the numbers (`references/edition-format.md`).
 
 **Secondary stories are not researched:** their 1–2 sentences come from title and summary. One exception: when the title does not name what it is about ("a free city-builder on Steam", "a farming sim announced"), one search only to find that name, at most twice per edition. Not found: leave the story out.
 
@@ -112,6 +112,8 @@ Use each section's `interest` and `count` from the config:
 - `old month?`: the title names another month ("inflation closes June" in November). It is probably old or republished news: leave it out unless the text is clearly about something new.
 - `recurring?`: a scheduled decision or figure (rate decision, inflation, jobs, GDP). Outlets republish these for days and the date shown is the republication's. Before using one, confirm with one web search (current month and year) that the decision or figure itself is inside the date window; if it is older, leave it out. For the headline, its extra research already does this. At most two such searches per edition: past that, leave the rest out.
 - `city`: the title names the reader's city. In the local section prefer these over stories from neighbouring towns.
+- `printed?`: the title looks like a fact a recent edition already printed, told by another outlet in other words. Leave it out unless it brings something new (a decision, a result, a number), and then say only what is new.
+- `count` is per section and the headline does not count in it; `total_news` counts every story, headline included. A story may be printed in another section when it fits that section's `interest` better (a sandbox game that came in the tech results goes to games); it then counts there.
 - Drop gossip, sponsored content, small-company press releases and news from other regions that does not affect the reader.
 - Headline: the story most relevant to the reader today (affects what they do, use or decide).
 - A section with nothing good is left out. Never pad with weak or invented stories. Rule 1 drops facts, rarely whole stories: a story that cannot be confirmed further is told only as its collected title and summary say. No story at all passes: leave `headline` and `sections` out; the edition still comes out (agenda, classifieds, weather, extras) with a short "no confirmed news today" note in place of the headline. The local section first gets one more search for the region (a neighbouring town, or the region with its state) and is left out only if that brings nothing either.
@@ -135,6 +137,7 @@ Write `WORK/edition.json` with the file-writing tool, in the reader's language, 
 - Headline: up to 14 words, present tense, main fact first. `deck`: one sentence with a consequence the sources state, never advice. `text`: 3–4 sentences, the first says what, who and when. `icon`: `lock`, `chip`, `coin`, `chart`, `gamepad`, `city`, `robot` or `newspaper`.
 - Section stories: title up to 12 words, text 1–2 sentences. With an empty summary, only restate the title's fact.
 - Agenda: one line per event, the reader's time format; all-day events use the language's "all day" label; empty day → `[]`. Classifieds: one sentence in your own words saying who asked, when and what; no amounts, codes or health data; already answered → `"tag"` with the `resolved` label, or drop it. Connector not connected → leave the key out; failed twice → `"agenda_error"` / `"classifieds_error"` (step 2).
+- Keep the source's hedges: if it says "potentially", "allegedly", "suspected", "may" or reports what someone claims, the paper says so too; never turn a possibility into a fact.
 - Everything in your own words; at most one literal quote per source, under 15 words. No fact, number, nationality or adjective that the collected text, a search made in this run or the Wikipedia text does not carry. No investment advice, no orders to the reader, no apologies, no narrating the process.
 - Anything else (fallback stories without `ref`, the weather object, `week` on Sundays, `prep_note`, `band`): `references/edition-format.md`.
 
@@ -143,6 +146,8 @@ Write `WORK/edition.json` with the file-writing tool, in the reader's language, 
 `python3 SKILL/scripts/assemble.py --skill SKILL --config WORK/config.json --work WORK --index WORK/index.json` (omit `--index` the first time; add `--single-page` in the single-page mode).
 - `ERROR:` → nothing was written. Fix the JSON and run again. It refuses when `WORK/collected.json` is missing (the collection is never skipped) and when the collection printed `NETWORK BLOCKED` but the no-network searches were not done (`references/no-network.md`).
 - `WARNING:` → consider it; it does not block.
+- `CHECK:` → words in a printed item (names, numbers, a dropped hedge, or, when only the title backs a story, longer words that are not in it) that the collected text does not carry. Step 7 starts with these.
+- **Never cut the output** (`| head`, `| tail`, `grep`): it is short, and every line matters. Read it whole, every run.
 - `OK:` → prints the files to publish (`as` -> path) and a `COVERAGE:` line: how many stories, which sections have them and which came out empty. Step 8 is written from these lines.
 - Both scripts append their command and output to `WORK/run.log` by themselves. Do not read it or send it; it is there only for a debug report the reader asks for.
 
@@ -158,6 +163,7 @@ Follow `references/archive.md` ("Adding today's edition"). Publish exactly the f
 
 - The agenda matches the calendar (times in the reader's timezone).
 - No email the reader already answered appears as pending.
+- First every `CHECK:` line: keep the word only if it paraphrases the source or comes from the page opened for the headline; otherwise remove it, and put back a hedge the source had.
 - **Sentence by sentence**, compare every written sentence (titles, deck, texts, both extras) with what backs it: the collected title and summary, the headline's search, the Wikipedia text or the "Did you know?" page. Remove any name, nationality, number, date, comparison ("faster than the previous ones"), adjective ("initial problems") or consequence ("proof that…") that is not there. A deck tells a consequence the sources state, never advice or an order to the reader ("should watch out for scams").
 - One item, one `ref`: never mix facts from two collected stories into one text.
 - Everything paraphrased.

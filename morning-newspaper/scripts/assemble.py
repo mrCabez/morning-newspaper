@@ -35,6 +35,7 @@ import os
 import re
 import shutil
 import sys
+import unicodedata
 
 try:
     from zoneinfo import ZoneInfo
@@ -196,6 +197,66 @@ def short(t, limit=140):
     """Cut at a word boundary, with an ellipsis."""
     t = " ".join((t or "").split())
     return t if len(t) <= limit else t[: limit - 1].rsplit(" ", 1)[0].rstrip(",;:") + "…"
+
+
+def _fold(t):
+    return unicodedata.normalize("NFKD", t or "").encode("ascii", "ignore").decode().lower()
+
+
+def _stems(t):
+    """Words cut to their first 5 letters, so "carregar" and "carregando" match."""
+    return {w[:5] for w in re.findall(r"[a-z0-9]+", _fold(t)) if len(w) > 3}
+
+
+# Words that soften a claim: when the source has one and the printed text has none, the paper
+# states as fact what the source only reported ("potentially exposed" -> "exposed").
+HEDGES = {"potencialmente", "possivelmente", "suposto", "suposta", "supostos", "supostas", "supostamente",
+          "teria", "teriam", "alegado", "alegada", "alegadamente", "pode", "podem", "poderia", "poderiam",
+          "possivel", "possiveis", "suspeita", "suspeito", "segundo", "aparentemente", "presumivelmente",
+          "potentially", "possibly", "allegedly", "alleged", "reportedly", "may", "might", "could",
+          "suspected", "apparently", "supuesto", "supuesta", "supuestamente", "podria", "podrian",
+          "presunto", "presunta", "presuntamente", "posiblemente", "potencialmente"}
+STOP_CAPS = {"o", "a", "os", "as", "um", "uma", "the", "el", "la", "los", "las", "en", "em", "no", "na", "de", "do",
+             "da", "and", "e", "y", "in", "on", "of", "por", "para", "com", "con", "with", "un", "una", "an"}
+
+
+def unsupported(written, source, empty_summary):
+    """What step 7 must look at in one printed item: names and numbers the collected text does not
+    carry, a hedge the source had and the text dropped and, when the summary was empty (only the
+    title backs the story), longer words that are not in the title. A hint, never a block: a
+    paraphrase is fine, a fact added from memory is not."""
+    src = _stems(source)
+    src_words = set(re.findall(r"[a-z0-9]+", _fold(source)))
+    notes = []
+    names = []
+    fields = written if isinstance(written, (list, tuple)) else [written]
+    for field in fields:
+        caps = re.findall(r"\b\w", field or "")
+        if caps and sum(c.isupper() for c in caps) / len(caps) > 0.6:
+            continue  # Title Case ("Road Work Starts Monday"): capitals say nothing about names
+        for sentence in re.split(r"(?<=[.!?:;])\s+|\n", field or ""):
+            toks = re.findall(r"[\w][\w'’-]*", sentence)
+            for i, tok in enumerate(toks):
+                if i == 0 or not tok[:1].isupper() or tok.lower() in STOP_CAPS:
+                    continue
+                if not (_stems(tok) <= src) and _fold(tok) not in src_words:
+                    names.append(tok)
+    written = " ".join(f for f in fields if f)
+    nums = [n for n in re.findall(r"\d+(?:[.,]\d+)*", written or "")
+            if n not in source and n.replace(".", "").replace(",", "") not in re.sub(r"[.,]", "", source)]
+    if names:
+        notes.append("names not in the source: " + ", ".join(dict.fromkeys(names)))
+    if nums:
+        notes.append("numbers not in the source: " + ", ".join(dict.fromkeys(nums)))
+    if src_words & HEDGES and not set(re.findall(r"[a-z0-9]+", _fold(written))) & HEDGES:
+        notes.append("the source hedges (" + ", ".join(sorted(src_words & HEDGES)) + ") and the text does not")
+    if empty_summary:
+        named = {_fold(n) for n in names}
+        extra = [w for w in re.findall(r"[a-z0-9]+", _fold(written))
+                 if len(w) >= 6 and w[:5] not in src and w not in named]
+        if extra:
+            notes.append("only the title backs it; words not in the title: " + ", ".join(list(dict.fromkeys(extra))[:8]))
+    return notes
 
 
 def word_count(t):
@@ -518,6 +579,13 @@ def build():
         for n in sections[sid]:
             if word_count(n.get("title")) > 12:
                 warnings.append(f"{sid}: title over 12 words: {n.get('title', '')[:40]}")
+    # Each section's "count" range is for its own stories; the headline is apart and never counts.
+    for sid, lst in sections.items():
+        rng = ((next((s for s in cfg["sections"] if s["id"] == sid), {}).get("count") or {})
+               .get("weekend" if weekend else "weekday") or [])
+        if len(rng) > 1 and len(lst) > rng[1]:
+            warnings.append(f"{sid}: {len(lst)} stories, above its count of {rng[0]}-{rng[1]} "
+                            "(the headline does not count): drop the weakest")
     # The collection marks stories that may tell the same fact (≈a1): both printed is one fact twice.
     printed_refs = [n.get("ref") for n in ([h] if h else []) + [x for v in sections.values() for x in v] if n.get("ref")]
     for r in printed_refs:
@@ -625,7 +693,7 @@ def build():
     band = ed.get("band") or " · ".join(filter(None, [
         kind, L["shared_band"] if a.share else "",
         (plural(len(agenda), "appointment", "appointments") if agenda else L["free_agenda"]) if has_agenda else "",
-        plural(len(classifieds), "classified", "classifieds") if classifieds else "",
+        plural(len(classifieds), "classified", "classifieds") if classifieds else (L["inbox_clear"] if has_mail else ""),
         f"{total} {L['news_items']}"]))
     summary_line = band.split(" · ", 1)[1] if " · " in band else band
     summary_line = summary_line[:1].upper() + summary_line[1:]
@@ -713,6 +781,23 @@ def build():
         if len(re.findall(rf"<{tag}[\s>]", page)) != page.count(f"</{tag}>"):
             errors.append(f"unbalanced <{tag}> tags in page")
 
+    # What step 7 should look at first: printed names, numbers and hedges the collected text does not
+    # back. A headline with its own researched page is checked by the model against that page.
+    CHECKS.clear()
+    items = [("headline", h)] if h and not (h.get("url") and h.get("url") != (refs.get(h.get("ref")) or {}).get("url")) else []
+    items += [(n.get("ref") or sid, n) for sid, lst in sections.items() for n in lst]
+    items += [("history", hist), ("did_you_know", dyk)]
+    for where, item in items:
+        base = refs.get(item.get("ref") or "")
+        if not base:
+            continue
+        source = " ".join(str(base.get(k) or "") for k in ("year", "title", "summary", "text", "extract"))
+        written = [str(item.get(k) or "") for k in ("title", "deck", "text")]
+        title_only = "id" in base and not (base.get("summary") or base.get("text") or base.get("extract"))
+        for note in unsupported(written, source, title_only):
+            CHECKS.append(f"{where}" + (f" ({item['ref']})" if item.get("ref") and item["ref"] != where else "")
+                          + f": {note}")
+
     for w in warnings:
         print("WARNING:", w)
     if errors:
@@ -725,7 +810,7 @@ def build():
     # network blocked can bring 2 stories where the morning had 5). Nothing is written; the model
     # keeps the published edition unless the reader chooses to replace it (--replace).
     if existing and not standalone and not a.replace:
-        before = len(existing.get("links") or []) or (len(existing.get("titles") or []) + 1 if existing.get("headline") else 0)
+        before = len(existing.get("link_ids") or existing.get("links") or []) or (len(existing.get("titles") or []) + 1 if existing.get("headline") else 0)
         if before > total:
             print(f"KEEP: today's edition No. {number:03d} is already published with {before} stories; "
                   f"this reissue has {total}. Nothing was written.")
@@ -762,7 +847,9 @@ def build():
         "titles": [n.get("title", "") for n in stories[1:]],
         # The titles as collected (before rewriting): what the next collections are compared against.
         "source_titles": [refs[n["ref"]].get("title", "") for n in stories if n.get("ref") in refs],
-        "links": [n.get("url", "") for n in stories],
+        # Fingerprints, not the links: Google News redirect URLs are long, and the index is read by
+        # every edition. collect.py compares fingerprints the same way.
+        "link_ids": sorted({link_id(n.get("url", "")) for n in stories if n.get("url")}),
     }
     archive_labels = {k: L[k] for k in ("html_lang", "archive_title", "archive_kicker", "archive_subtitle",
                                         "latest_edition", "previous_editions", "archive_empty", "archive_error",
@@ -770,6 +857,9 @@ def build():
     new = {"newspaper": news_name, "founded": (index or {}).get("founded") or (index or {}).get("fundado_em")
            or day.isoformat(), "labels": archive_labels, "editions": [entry] + previous}
     new["editions"].sort(key=d_of, reverse=True)
+    for e in new["editions"]:
+        if "links" in e:  # entries written before v1.9.0
+            e["link_ids"] = sorted({link_id(u) for u in e.pop("links") if u} | set(e.get("link_ids") or []))
     for e in new["editions"][DEDUP_EDITIONS:]:
         for k in ("titles", "source_titles", "links", "link_ids"):
             e.pop(k, None)
@@ -842,8 +932,16 @@ def coverage(total, filled, empty, titles):
               "Never describe the edition as covering them.")
 
 
+CHECKS = []
+
+
 def next_steps(single, standalone=False):
     """What is left after the files are written, printed where the model reads it."""
+    for c in CHECKS:
+        print("CHECK:", c)
+    if CHECKS:
+        print("  Each CHECK names words the collected text does not carry. Keep them only if they are a "
+              "paraphrase or come from the page you opened for the headline; otherwise remove them (step 7).")
     print("NEXT (mandatory, in order):")
     if standalone:
         print("  6. Nothing to publish: send the file above to the reader, with one sentence on why there is "

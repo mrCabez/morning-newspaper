@@ -1,4 +1,5 @@
 """scripts/assemble.py: builds the edition HTML and the newsstand index from edition.json."""
+import hashlib
 import html
 import json
 import re
@@ -8,6 +9,10 @@ import sys
 import pytest
 
 from conftest import SCRIPTS
+
+
+def link_id(url):
+    return hashlib.sha1(url.encode("utf-8")).hexdigest()[:12]
 
 
 def ok(proc):
@@ -82,7 +87,8 @@ def test_index_entry(assembler):
     assert entry["type"] == "morning"
     assert entry["file"] == "editions/2026-11-13.html"
     assert entry["headline"] == "Browser patches a flaw already under attack"
-    assert "https://tech.example.com/a1" in entry["links"]
+    assert "links" not in entry  # fingerprints only: Google News links are long
+    assert link_id("https://tech.example.com/a1") in entry["link_ids"]
     assert len(entry["titles"]) == 4
 
 
@@ -176,7 +182,7 @@ def test_legacy_newsstand_is_migrated(assembler):
     assert new["number"] == 8
     assert old == {"date": "2026-11-12", "number": 7, "weekday": "quinta-feira", "type": "weekend",
                    "headline": "Manchete antiga", "summary": "agenda livre", "file": "edicoes/2026-11-12.html",
-                   "titles": ["Um", "Dois"], "links": ["https://old.example/1"],
+                   "titles": ["Um", "Dois"], "link_ids": [link_id("https://old.example/1")],
                    "extras": {"history": "Em 1990...", "did_you_know": "O mouse..."}}
 
 
@@ -826,3 +832,48 @@ def test_run_log_appends_runs_including_refusals(assembler):
     assert log.count("===== assemble.py ·") == 2
     assert "[exit 1]" in log and "[exit 0]" in log
     assert "is not in config.json" in log
+
+
+# ---------------------------------------------------------------- v1.9.0
+
+def test_check_lines_flag_names_numbers_and_dropped_hedges(assembler):
+    assembler.collected["news"]["tech"][0]["title"] = "Bank says data of clients was potentially exposed"
+    for sid, lst in assembler.edition["sections"].items():
+        for n in lst:
+            if n.get("ref") == "a1":
+                n["title"] = "Bank exposed data of clients"
+                n["text"] = "The Mega Bank exposed data of 300 clients."
+    if assembler.edition["headline"].get("ref") == "a1":
+        h = assembler.edition["headline"]
+        h["title"], h["text"] = "Bank exposed data of clients", "The Mega Bank exposed data of 300 clients."
+    proc = ok(assembler.run())
+    checks = [l for l in proc.stdout.splitlines() if l.startswith("CHECK:") and "a1" in l]
+    joined = " ".join(checks)
+    assert "Mega" in joined and "300" in joined and "hedges" in joined
+
+
+def test_a_faithful_story_gets_no_check(collect_module):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("assemble_mod", SCRIPTS / "assemble.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    src = "Debian corrige falha no Sympa que expõe e-mails apagados"
+    assert mod.unsupported("Debian corrige falha no Sympa. O Debian corrigiu a falha.", src, True) == []
+    notes = mod.unsupported("O Debian corrigiu o Sympa, gerenciador de listas de e-mail.", src, True)
+    assert any("gerenciador" in n for n in notes)
+
+
+def test_section_count_excludes_the_headline(assembler):
+    sid = next(iter(assembler.edition["sections"]))
+    rng = next(s for s in assembler.config["sections"] if s["id"] == sid)["count"]["weekday"]
+    assembler.config["sections"] = [dict(s, count={"weekday": [0, 0], "weekend": [0, 0]}) if s["id"] == sid else s
+                                    for s in assembler.config["sections"]]
+    proc = ok(assembler.run())
+    assert f"WARNING: {sid}:" in proc.stdout and "headline does not count" in proc.stdout
+
+
+def test_summary_says_inbox_up_to_date(assembler):
+    assembler.edition["classifieds"] = []
+    ok(assembler.run())
+    entry = assembler.new_index()["editions"][0]
+    assert "inbox up to date" in entry["summary"]

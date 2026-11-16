@@ -771,3 +771,32 @@ def test_collect_run_log_script_mode_records_exit(tmp_path, config):
                            "--from-results", str(tmp_path / "results.json")], capture_output=True, text=True)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "[exit 0]" in (tmp_path / "w" / "run.log").read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------- v1.9.0
+
+def test_avoid_outlets_filters_news(collect_module, offline, config):
+    offline["news.google.com"] = rss(
+        ("Browser patches flaw", "https://n.example/1", 1, "Vietnam.vn"),
+        ("Router maker fixes bug", "https://n.example/2", 2, "Good Outlet"))
+    config["avoid_outlets"] = ["vietnam.vn"]
+    news, _ = collect_module.collect_news(config, 48, NOW, set(), [], UTC)
+    assert [n["outlet"] for n in news["tech"]] == ["Good Outlet"]
+
+
+def test_a_fact_printed_before_in_other_words_is_flagged(collect_module):
+    past = ["Médico do Mais Médicos é filmado carregando o BYD na tomada de uma UBS de Pará de Minas"]
+    assert collect_module.printed_before(
+        "Médico é alvo de denúncia após carregar carro elétrico em unidade de saúde de Pará de Minas",
+        past, "Pará de Minas")
+    # Two different local stories share only the city's name: no hint.
+    assert not collect_module.printed_before(
+        "Prefeitura de Pará de Minas abre inscrições para curso de informática", past, "Pará de Minas")
+
+
+def test_printed_flag_reaches_the_candidates(collect_module, offline, config):
+    offline["news.google.com"] = rss(
+        ("Hackers leak records of 7 million clients at national bank", "https://n.example/9", 1, "A"))
+    news, _ = collect_module.collect_news(config, 48, NOW, set(),
+                                          ["Bank confirms hackers leaked client records"], UTC)
+    assert "printed?" in news["tech"][0].get("flags", [])

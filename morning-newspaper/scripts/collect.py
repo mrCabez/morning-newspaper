@@ -256,6 +256,25 @@ def related(a, b):
     return len(shared) >= 2 and len(shared) / min(len(pa), len(pb)) >= 0.4
 
 
+def printed_before(title, past_titles, city=""):
+    """Looser repeat check against recent editions: the same fact told by another outlet with other
+    words ("Médico é alvo de denúncia após carregar carro elétrico…" after "Médico é filmado
+    carregando o BYD…"). The reader's city is left out of the comparison: two different local
+    stories both name it. Only a hint (printed?), nothing is dropped because of it."""
+    city_stems = stems(city) if city else set()
+    mine = stems(title) - city_stems
+    for t in past_titles:
+        other = stems(t) - city_stems
+        shared = mine & other
+        if mine and other and len(shared) >= 2 and len(shared) / min(len(mine), len(other)) >= 0.4:
+            return True
+    return False
+
+
+def outlet_key(name):
+    return " ".join(words(name))
+
+
 def junk_title(title, outlet):
     """Empty titles, or titles that are only the outlet's name ("- Jornal Panorama")."""
     t = (title or "").strip(" -–—|·:")
@@ -503,6 +522,9 @@ def rank_news(cfg, task_sections, results, window_h, now, used_links, used_title
     for sec in cfg["sections"]:
         sid = sec["id"]
         avoid = phrases(list(cfg.get("avoid") or []) + list(sec.get("avoid") or []))
+        # Outlets the reader never wants (e.g. another country's sites that share the language).
+        blocked_outlets = {outlet_key(o) for o in list(cfg.get("avoid_outlets") or []) + list(sec.get("avoid_outlets") or [])}
+        blocked_outlets.discard("")
         # One queue per search/feed, newest first, already cleared of old, repeated and avoided stories.
         queues = []
         for i, (task_sid, _) in enumerate(tasks):
@@ -514,6 +536,8 @@ def rank_news(cfg, task_sections, results, window_h, now, used_links, used_title
                     drop(sid, "outside the window")
                 elif it["url"] in used_links or link_id(it["url"]) in used_links:
                     drop(sid, "link already printed", it["title"])
+                elif blocked_outlets and outlet_key(it.get("outlet", "")) in blocked_outlets:
+                    drop(sid, "avoid_outlets list", it["title"])
                 elif avoided(f"{it['title']} {it['summary']}", avoid):
                     drop(sid, "avoid list", it["title"])
                 elif any(same_story(it["title"], t) for t in used_titles):
@@ -552,6 +576,8 @@ def rank_news(cfg, task_sections, results, window_h, now, used_links, used_title
                 flags.append(f"≈{group['id']}")
             else:
                 groups.append({"id": n["id"], "titles": [it["title"]]})
+            if used_titles and printed_before(it["title"], used_titles, city):
+                flags.append("printed?")
             if other_month(it["title"], now.date()):
                 flags.append("old month?")
             elif recurring(it["title"], cfg.get("recurring_terms") or []):
@@ -934,7 +960,8 @@ def main():
               " month (likely old news) · recurring? = a scheduled decision or figure (rates, inflation…):"
               " the date shown may be a republication, confirm the event date before using it"
               " · city = names the reader's city · date? = no date was given: confirm it is inside the window"
-              " before using it")
+              " before using it · printed? = may be a fact a recent edition already printed: leave it out"
+              " unless it brings something new")
     for sec in cfg["sections"]:
         print(f"\n[{sec['id']}] {sec['title']}")
         for n in news.get(sec["id"], []):
