@@ -2,6 +2,29 @@
 
 All notable changes to Morning Newspaper. Each release on GitHub uses the matching section below as its notes.
 
+## v1.9.0 — 2026-11-16
+
+From the debug report of scheduled edition No. 006.
+
+### New
+- **`CHECK:` lines.** After `OK:`, `assemble.py` names the words of each printed item that its collected text does not carry: names, numbers, a hedge the source had and the text dropped ("potentially exposed" printed as "exposed") and, when only the title backs a story, the longer words that are not in it. Step 7 starts with them.
+- **`printed?` flag.** The collection marks a story that looks like a fact a recent edition already printed, told by another outlet in other words (the reader's city is left out of the comparison). Nothing is dropped: the model leaves it out unless it brings something new.
+- **`avoid_outlets`** (optional, in `config.json`): outlet names whose stories never come in, such as another country's sites that share the language.
+- **Section count warning.** A section above its own `count` gets a warning; the headline never counts there.
+
+### Fixed
+- Scheduled runs no longer send the "takes a few minutes" line: nothing goes out before the summary.
+- The newsstand's summary line says the inbox is up to date when Gmail was read and nothing is waiting.
+- The index keeps short link fingerprints instead of Google News links, so it is about half the size; older entries are converted on the next edition.
+
+### Changed
+- Never cut the scripts' output (`| head` hid possible warnings).
+- Keep the source's hedges: a possibility is never printed as a fact.
+- The thorough headline search is also used when the results are about something else, with the full name instead of an acronym.
+- The agenda names the primary calendar explicitly; Gmail conversations with several messages are opened when the shown message does not settle them; only the tool schemas about to be called are loaded.
+- A story may be printed in the section whose interest it fits (a sandbox game found by a tech search goes to games).
+- `references/archive.md`: the version is passed only when the publishing tool takes one; keep the slug the task gave.
+
 ## v1.8.0 — 2026-11-15
 
 From the debug report of a first edition made in another app, which came out with a single story while the reply promised every section.
