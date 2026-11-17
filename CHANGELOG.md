@@ -2,6 +2,15 @@
 
 All notable changes to Morning Newspaper. Each release on GitHub uses the matching section below as its notes.
 
+## v1.10.0 — 2026-11-17
+
+### New
+- **28 more headline illustrations.** The halftone "photo" of the headline now has 36 line icons instead of 8, so stories about health, sport, elections, courts, the environment, travel, culture and more get a matching drawing instead of the generic newspaper: `capitol`, `ballot`, `gavel`, `shield`, `megaphone`, `people`, `globe`, `briefcase`, `cart`, `fuel`, `bolt`, `wheat`, `house`, `phone`, `wifi`, `flask`, `rocket`, `heart`, `leaf`, `thermometer`, `book`, `car`, `bus`, `plane`, `film`, `music`, `ball` and `trophy`. Same style as the original eight.
+- `references/edition-format.md` groups the icons by topic; `SKILL.md` lists them all. An unknown name still prints `newspaper`.
+
+### Tests
+- A new test keeps the icon lists in `SKILL.md` and `edition-format.md` in sync with the drawings and checks that each one is valid SVG.
+
 ## v1.9.0 — 2026-11-16
 
 From the debug report of scheduled edition No. 006.
