@@ -99,5 +99,9 @@
  "shared_note_agenda": "Cópia para compartilhar: a agenda do leitor fica de fora.",
  "shared_note_mail": "Cópia para compartilhar: os e-mails do leitor ficam de fora.",
  "newsstand_missing_note": "A banca indicada na tarefa agendada não foi encontrada, então esta edição não entrou nela.",
- "newsstand_missing_no_config": "Sem a configuração da banca, não há seções de notícias hoje: só agenda, e-mails e extras."
+ "newsstand_missing_no_config": "Sem a configuração da banca, não há seções de notícias hoje: só agenda, e-mails e extras.",
+ "newsstand_missing_section": "Aviso ao leitor",
+ "newsstand_missing_title": "Banca não encontrada",
+ "newsstand_missing_steps": ["Abra seus artefatos no Claude e procure a banca do jornal.", "Se ela estiver lá, foi uma falha passageira: não é preciso fazer nada, a próxima edição volta para a banca.", "Se ela foi apagada, peça ao Claude para criar uma nova banca do seu jornal; ele refaz as suas seções e informa o novo endereço (slug).", "Troque o slug antigo pelo novo no prompt da tarefa agendada."],
+ "newsstand_missing_steps_title": "O que fazer"
 }

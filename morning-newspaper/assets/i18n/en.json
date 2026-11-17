@@ -99,5 +99,9 @@
  "shared_note_agenda": "Copy to share: the reader's agenda is left out.",
  "shared_note_mail": "Copy to share: the reader's emails are left out.",
  "newsstand_missing_note": "The newsstand named in the scheduled task was not found, so this edition was not added to it.",
- "newsstand_missing_no_config": "Without the newsstand's settings there are no news sections today: only the agenda, emails and extras."
+ "newsstand_missing_no_config": "Without the newsstand's settings there are no news sections today: only the agenda, emails and extras.",
+ "newsstand_missing_section": "Notice to the reader",
+ "newsstand_missing_title": "Newsstand not found",
+ "newsstand_missing_steps": ["Open your artifacts in Claude and look for the newspaper's newsstand.", "If it is there, it was a passing failure: nothing to do, the next edition goes back to the newsstand.", "If it was deleted, ask Claude to create a new newsstand for your newspaper; it sets up your sections again and gives you the new address (slug).", "Replace the old slug with the new one in the scheduled task's prompt."],
+ "newsstand_missing_steps_title": "What to do"
 }

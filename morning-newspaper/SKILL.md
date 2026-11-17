@@ -191,7 +191,7 @@ Follow `references/archive.md` ("Adding today's edition"). Publish exactly the f
 
 1. Always: the edition number and today's headline (the artifact card already shows the link). Describe only what the `OK:` and `COVERAGE:` lines say the edition carries: never list sections or topics it does not have, and never announce the edition before `assemble.py` printed `OK:`.
 2. **Attention:** only what asks the reader to act. Today that means security alert emails (new sign-in, password change): how many and which accounts, never codes, links, dates, places, devices or other details.
-3. **Missing:** only when Calendar or Gmail is not connected or failed after the second try, the newsstand given in the task was not found (`references/modes.md`), or the weather, a whole section or every story came out empty. One line, plain words, no technical details.
+3. **Missing:** only when Calendar or Gmail is not connected or failed after the second try, the newsstand given in the task was not found (`references/modes.md`: then one more line offers the backup it describes), or the weather, a whole section or every story came out empty. One line, plain words, no technical details.
 4. 📅 Only in an interactive run, only when this session has a scheduled-task tool, and only when no scheduled task runs this newspaper (check when the tools can list them). Without a scheduled-task tool there is no 📅 line.
 
 Never in the summary: the agenda or emails waiting for a reply (they are in the paper), a sources list (the paper carries its sources), the steps taken, checks, unconfirmed numbers, newsstand or script details, or any other caveat. The reader asks if they want more.

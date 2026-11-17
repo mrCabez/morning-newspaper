@@ -99,5 +99,9 @@
  "shared_note_agenda": "Copia para compartir: la agenda del lector queda fuera.",
  "shared_note_mail": "Copia para compartir: los correos del lector quedan fuera.",
  "newsstand_missing_note": "No se encontró el quiosco indicado en la tarea programada, así que esta edición no se añadió a él.",
- "newsstand_missing_no_config": "Sin la configuración del quiosco no hay secciones de noticias hoy: solo agenda, correos y extras."
+ "newsstand_missing_no_config": "Sin la configuración del quiosco no hay secciones de noticias hoy: solo agenda, correos y extras.",
+ "newsstand_missing_section": "Aviso al lector",
+ "newsstand_missing_title": "Quiosco no encontrado",
+ "newsstand_missing_steps": ["Abre tus artefactos en Claude y busca el quiosco del periódico.", "Si está ahí, fue un fallo pasajero: no hay que hacer nada, la próxima edición vuelve al quiosco.", "Si se borró, pide a Claude que cree un nuevo quiosco para tu periódico; rehace tus secciones y te da la nueva dirección (slug).", "Cambia el slug antiguo por el nuevo en el prompt de la tarea programada."],
+ "newsstand_missing_steps_title": "Qué hacer"
 }

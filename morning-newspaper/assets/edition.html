@@ -72,6 +72,9 @@ a{color:var(--azul)}a:hover{color:var(--verm)}
 .editorial{margin-top:16px}
 .editorial .ttl{font-family:"Gloock",Georgia,serif;font-size:26px;line-height:1.1;margin:10px 0 8px;text-align:center}
 .editorial p{text-align:justify;hyphens:auto;margin:6px 0 0}
+.aviso-banca .rot{margin-top:10px;color:var(--azul)}
+.aviso-banca ol{margin:4px 0 0;padding-left:22px}
+.aviso-banca li{margin:3px 0}
 .cmd{hyphens:none;-webkit-hyphens:none}
 </style>
 </head>
@@ -88,6 +91,15 @@ a{color:var(--azul)}a:hover{color:var(--verm)}
 <div class="fio-duplo"></div>
 <div class="faixa sc">{{BAND}}</div>
 <!--IF:shared_note--><div class="aviso-copia">{{SHARED_NOTE}}</div><!--/IF:shared_note-->
+
+<!--IF:newsstand_missing-->
+<section class="editorial aviso-banca"><div class="secao-titulo sc">{{L_newsstand_missing_section}}</div>
+<div class="ttl">{{L_newsstand_missing_title}}</div>
+<p>{{NEWSSTAND_MISSING_TEXT}}</p>
+<div class="rot sc">{{L_newsstand_missing_steps_title}}</div>
+<ol><!--EACH:newsstand_steps--><li>{{text}}</li><!--/EACH:newsstand_steps--></ol></section>
+<div class="fio-triplo"></div>
+<!--/IF:newsstand_missing-->
 
 <!--IF:sample-->
 <section class="editorial"><div class="secao-titulo sc">{{L_sample_section}}</div>

@@ -359,7 +359,7 @@ def load_labels(skill, cfg):
     return labels
 
 
-LABEL_LISTS = {"weekdays": 7, "weekdays_short": 7, "months_short": 12, "months": 12}
+LABEL_LISTS = {"weekdays": 7, "weekdays_short": 7, "months_short": 12, "months": 12, "newsstand_missing_steps": 4}
 
 
 def label_errors(L):
@@ -762,12 +762,15 @@ def build():
         shared_note = L["shared_note_agenda"]
     elif a.share and not has_mail:
         shared_note = L["shared_note_mail"]
+    # The newsstand named in the task was not found: a notice with what to do takes the top of the
+    # page. Without a config (it lives in the newsstand) there are no sections, so the notice also
+    # takes the headline's place: "no confirmed news" would wrongly blame the news.
+    missing_text = ""
     if a.newsstand_missing:
-        shared_note = L["newsstand_missing_note"]
+        missing_text = L["newsstand_missing_note"]
         if not cfg.get("sections"):
-            # The reader's config lives in the newsstand: without it there are no sections to fill,
-            # so "no confirmed news" would wrongly blame the news.
-            L = dict(L, no_news_text=L["newsstand_missing_no_config"])
+            missing_text += " " + L["newsstand_missing_no_config"]
+            no_news = False
 
     def fmt_date(fmt):
         return fmt.format(weekday=L["weekdays"][day.weekday()], day=day.day,
@@ -795,6 +798,7 @@ def build():
         "url_weather": bool(weather_url),
         "weather_source": bool(not weather_url and (weather or {}).get("source")),
         "WEATHER_SOURCE": (weather or {}).get("source", ""),
+        "newsstand_missing": bool(missing_text), "NEWSSTAND_MISSING_TEXT": missing_text,
         "no_news": no_news, "headline": bool(h), "HEADLINE_SECTION": h_section, "HEADLINE_TITLE": h.get("title", ""),
         "HEADLINE_DECK": h.get("deck", ""),
         "SVG_HEADLINE": svg(SVG_ICON.get(h.get("icon"), SVG_ICON["newspaper"]), 56),
@@ -827,7 +831,8 @@ def build():
     stext = L["sample_text"].split("{command}")
     srest = esc(stext[0][1:]) + (f'<b class="cmd">"{esc(L["sample_command"])}"</b>' + esc(stext[1]) if len(stext) > 1 else "")
     ctx.update({"sample": sample, "SAMPLE_FIRST": stext[0][:1], "SAMPLE_REST_HTML": srest})
-    lists = {"agenda": agenda, "classifieds": classifieds, "week": week}
+    lists = {"agenda": agenda, "classifieds": classifieds, "week": week,
+             "newsstand_steps": [{"text": t} for t in (L["newsstand_missing_steps"] if missing_text else [])]}
 
     with open(os.path.join(a.skill, "assets", "edition.html"), encoding="utf-8") as f:
         page = render(f.read(), ctx, lists)
