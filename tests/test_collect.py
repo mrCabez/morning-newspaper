@@ -882,3 +882,64 @@ def test_list_articles_are_not_did_you_know_candidates(collect_module):
               "Lista de distribuições Linux"]:
         assert re.match(collect_module.LIST_ARTICLE, t, re.I)
     assert not re.match(collect_module.LIST_ARTICLE, "Debian", re.I)
+
+
+def test_section_keywords_come_first_and_others_get_fit_flag(collect_module, offline, config):
+    """Edition 007: 7 of 8 game candidates were off-genre; keywords put the ones that fit first."""
+    offline["news.google.com"] = rss(
+        ("Novo jogo de tiro chega ao PC", "https://n.example/1", 1, "A"),
+        ("Simulador de fazenda ganha atualização gratuita", "https://n.example/2", 5, "B"),
+        ("Jogo sandbox de construção sai do acesso antecipado", "https://n.example/3", 6, "C"))
+    config["sections"] = config["sections"][:1]
+    config["sections"][0]["keywords"] = ["simulação", "sandbox"]
+    config["sections"][0]["max_candidates"] = 2
+    news, _ = collect_module.collect_news(config, 48, NOW, set(), [], UTC)
+    titles = [n["title"] for n in news["tech"]]
+    assert titles == ["Simulador de fazenda ganha atualização gratuita",
+                      "Jogo sandbox de construção sai do acesso antecipado"]  # the shooter did not crowd them out
+    assert all("fit?" not in n.get("flags", []) for n in news["tech"])
+    config["sections"][0]["max_candidates"] = 10
+    news, _ = collect_module.collect_news(config, 48, NOW, set(), [], UTC)
+    assert news["tech"][-1]["title"] == "Novo jogo de tiro chega ao PC"
+    assert "fit?" in news["tech"][-1]["flags"]
+
+
+def test_keyword_hit_matches_word_families_not_fragments(collect_module):
+    assert collect_module.keyword_hit("Novo simulador de ônibus", ["simulação"])
+    assert collect_module.keyword_hit("City builder chega ao Steam", ["city builder"])
+    assert not collect_module.keyword_hit("Um jogo simples de cartas", ["sim"])
+    assert not collect_module.keyword_hit("City of thieves", ["city builder"])
+
+
+def test_did_you_know_tries_the_readers_language_first(collect_module, offline, config, monkeypatch):
+    """Reader's Wikipedia first (no translation needed), once; seeds and English after."""
+    config["language"] = "pt-BR"
+    config.pop("wikipedia_lang", None)
+    config["did_you_know_themes"] = ["open-source software history"]
+    calls = []
+    real = collect_module.fetch
+    monkeypatch.setattr(collect_module, "fetch", lambda url, tries=2: (calls.append((url, tries)), real(url, tries))[1])
+    long_text = "O projeto foi anunciado numa lista de discussão e batizado com o nome dos fundadores. " * 3
+    offline["pt.wikipedia.org/w/api.php"] = json.dumps({"query": {"search": [{"title": "Debian"}, {"title": "GNU"}]}})
+    for t in ("Debian", "GNU"):
+        offline[f"pt.wikipedia.org/api/rest_v1/page/summary/{t}"] = json.dumps(
+            {"type": "standard", "title": t, "extract": long_text,
+             "content_urls": {"desktop": {"page": f"https://pt.wikipedia.org/wiki/{t}"}}})
+    cands = collect_module.collect_did_you_know(config, dt.date(2026, 11, 17), used=[])
+    assert [c["lang"] for c in cands] == ["pt", "pt"]
+    assert calls[0][0].startswith("https://pt.wikipedia.org/w/api.php") and calls[0][1] == 1
+    assert not any("en.wikipedia.org" in u for u, _ in calls)
+
+
+def test_catch_up_run_stops_when_todays_edition_is_printed(tmp_path, config):
+    """A later catch-up task costs nothing on the days the 7:00 run finished."""
+    import subprocess, sys
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps(config), encoding="utf-8")
+    idx = tmp_path / "index.json"
+    idx.write_text(json.dumps({"editions": [{"date": "2026-11-17", "number": 7, "headline": "X"}]}), encoding="utf-8")
+    proc = subprocess.run([sys.executable, "-I", str(ROOT / "morning-newspaper" / "scripts" / "collect.py"), "--config", str(cfg), "--work",
+                           str(tmp_path / "w"), "--index", str(idx), "--date", "2026-11-17", "--catch-up"],
+                          capture_output=True, text=True, timeout=30)
+    assert proc.returncode == 0 and "ALREADY PRINTED: No. 007" in proc.stdout
+    assert "WEATHER" not in proc.stdout  # stopped before any network access

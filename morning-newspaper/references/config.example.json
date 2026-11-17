@@ -55,6 +55,7 @@
       "interest": "Simulation and sandbox games: launches, big updates, notable sales.",
       "count": { "weekday": [1, 1], "weekend": [1, 1] },
       "queries": ["simulation game update", "sandbox game release"],
+      "keywords": ["simulation", "simulator", "sandbox", "city builder", "farming sim", "management game"],
       "feeds": []
     }
   ],

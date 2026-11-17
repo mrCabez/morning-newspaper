@@ -137,34 +137,38 @@ def wiki_lang(cfg):
 def collect_did_you_know(cfg, day, used):
     """'Did you know?' candidates (k1, k2…): Wikipedia articles on today's theme, with their summary.
     Like "On this day", Wikipedia counts as confirmation, so the model needs no search or page of
-    its own. A built-in theme first reads its seed articles (English Wikipedia's cached page
-    summaries, which answer even when the search API refuses with 429); a theme without seeds, or
-    seeds already used up, falls back to searching the reader's Wikipedia, then English."""
+    its own. Order: a search on the reader's Wikipedia, tried once (its text needs no translation;
+    the search API answers 429 to shared cloud addresses, so a refusal is not waited out); then the
+    theme's seed articles (English Wikipedia's cached page summaries, which answer far more often);
+    then a patient search on the English Wikipedia."""
     themes = cfg.get("did_you_know_themes") or DYK_THEMES
     theme = dyk_theme(cfg, day)
     used_n = [u for u in used if u]
     cands, errors = [], []
-    seeds = DYK_SEEDS.get(theme) or []
-    if seeds:
-        start = (day.toordinal() // len(themes)) % len(seeds)  # other articles the next time around
-        cands += wiki_summaries("en", (seeds[start:] + seeds[:start])[:4], used_n, want=3)
     query = theme_query(theme)
     offset = (day.toordinal() // len(themes)) % 3 * 4  # the next time the theme comes back, other articles
-    for lang in dict.fromkeys([wiki_lang(cfg), "en"]):
+    seeds = DYK_SEEDS.get(theme) or []
+    start = (day.toordinal() // len(themes)) % len(seeds) if seeds else 0
+    reader = wiki_lang(cfg)
+    steps = [("search", reader, 1), ("seeds", "en", 0)]
+    if reader != "en" or not seeds:
+        steps.append(("search", "en", 3))
+    for kind, lang, tries in steps:
         if len(cands) >= 2:
             break
-        q = urllib.parse.urlencode({"action": "query", "list": "search", "srsearch": query, "srlimit": 4,
-                                    "sroffset": offset, "srnamespace": 0, "format": "json"})
-        # The search answers 429 to short bursts from shared cloud addresses: wait and try again,
-        # and if this language still fails, go on to the next one instead of giving up.
-        try:
-            hits = json.loads(fetch(f"https://{lang}.wikipedia.org/w/api.php?{q}", tries=3)).get("query", {}).get("search", [])
-        except Exception as e:
-            errors.append(e)
-            continue
         known = {c["title"] for c in cands}
-        titles = [h["title"] for h in hits if h.get("title") and h["title"] not in known
-                  and not re.match(LIST_ARTICLE, h["title"], re.I)]
+        if kind == "seeds":
+            titles = [t for t in seeds[start:] + seeds[:start] if t not in known][:4]
+        else:
+            q = urllib.parse.urlencode({"action": "query", "list": "search", "srsearch": query, "srlimit": 4,
+                                        "sroffset": offset, "srnamespace": 0, "format": "json"})
+            try:
+                hits = json.loads(fetch(f"https://{lang}.wikipedia.org/w/api.php?{q}", tries=tries)).get("query", {}).get("search", [])
+            except Exception as e:
+                errors.append(e)
+                continue
+            titles = [h["title"] for h in hits if h.get("title") and h["title"] not in known
+                      and not re.match(LIST_ARTICLE, h["title"], re.I)]
         cands += wiki_summaries(lang, titles, used_n, want=3 - len(cands))
     if not cands and errors:
         raise errors[-1]  # reported in FAILURES with its HTTP code
@@ -438,6 +442,18 @@ def phrases(lst):
     return [" ".join(words(p)) for p in lst or [] if words(str(p))]
 
 
+def keyword_hit(text, keywords):
+    """True if the text carries one of the section's keywords. Each keyword word matches any word
+    that starts with its first five letters, so "simulação" also finds "simulador" and "simuladores";
+    shorter words must match whole ("sim" never matches "simples")."""
+    have = words(text)
+    for kw in keywords:
+        parts = words(kw)
+        if parts and all(any(h.startswith(w[:5]) if len(w) >= 5 else h == w for h in have) for w in parts):
+            return True
+    return False
+
+
 def avoided(text, avoid):
     """True if any avoided word or phrase appears in the text as whole words
     ("war" matches "the war ended", never "software")."""
@@ -640,18 +656,29 @@ def rank_news(cfg, task_sections, results, window_h, now, used_links, used_title
                 else:
                     ok.append(it)
             queues.append(sorted(ok, key=lambda x: x["date"] or undated_last, reverse=True))
+        # The section's keywords (optional): stories that carry one fill the list first, so a
+        # search that also brings unrelated games or topics cannot crowd out the ones that fit.
+        keywords = [k for k in sec.get("keywords") or [] if words(str(k))]
+        fits = (lambda it: keyword_hit(f"{it['title']} {it['summary']}", keywords)) if keywords else (lambda it: True)
+        rounds = [[[it for it in q if fits(it)] for q in queues]]
+        if keywords:
+            rounds.append([[it for it in q if not fits(it)] for q in queues])
         # Take turns: the newest story of each search, then the second of each, and so on.
-        kept, limit, depth = [], sec.get("max_candidates", 10), 0
-        while len(kept) < limit and any(depth < len(q) for q in queues):
-            for q in queues:
-                if depth < len(q) and len(kept) < limit:
-                    it = q[depth]
-                    if not any(it["url"] == k["url"] or same_story(it["title"], k["title"]) for k in kept):
-                        kept.append(it)
-                    else:
-                        drop(sid, "same story as another candidate", it["title"])
-            depth += 1
+        kept, limit = [], sec.get("max_candidates", 10)
+        for round_queues in rounds:
+            depth = 0
+            while len(kept) < limit and any(depth < len(q) for q in round_queues):
+                for q in round_queues:
+                    if depth < len(q) and len(kept) < limit:
+                        it = q[depth]
+                        if not any(it["url"] == k["url"] or same_story(it["title"], k["title"]) for k in kept):
+                            kept.append(it)
+                        else:
+                            drop(sid, "same story as another candidate", it["title"])
+                depth += 1
         kept.sort(key=lambda x: x["date"] or undated_last, reverse=True)
+        if keywords:
+            kept.sort(key=lambda x: not fits(x))
         # Local sections of a small town fill up with the region: the stories that name the city
         # itself come first, so a busy neighbouring town cannot push them out of sight.
         city = (cfg.get("city") or {}).get("name", "")
@@ -682,6 +709,8 @@ def rank_news(cfg, task_sections, results, window_h, now, used_links, used_title
                 flags.append("recurring?")
             if city and names_city(it["title"], city):
                 flags.append("city")
+            if keywords and not fits(it):
+                flags.append("fit?")
             if flags:
                 n["flags"] = flags
             items.append(n)
@@ -959,6 +988,8 @@ def main():
     ap.add_argument("--date", help="YYYY-MM-DD (default: today in the reader's timezone)")
     ap.add_argument("--from-results", metavar="FILE",
                     help="no network: filter and rank the web search results in FILE instead of fetching")
+    ap.add_argument("--catch-up", action="store_true",
+                    help="catch-up run: if today's edition is already on the newsstand, stop before collecting")
     a = ap.parse_args()
     start_log(a.work, "collect.py")
 
@@ -998,6 +1029,13 @@ def main():
     number = max([e.get("number") or e.get("numero") or 0 for e in previous] + [0]) + 1
     reissue = next((e.get("number") or e.get("numero") for e in editions
                     if (e.get("date") or e.get("data")) == day.isoformat()), None)
+
+    if a.catch_up and reissue:
+        # A second scheduled task later in the morning, for the days the first run never finished
+        # (cut short, usage limit, publishing refused). Most days the paper is there: cost ~nothing.
+        print(f"ALREADY PRINTED: No. {reissue:03d} is on the newsstand for {day.isoformat()}. "
+              "Catch-up run: stop here, publish nothing and send nothing.")
+        return 0
 
     problems, did_you_know = [], []
     if a.from_results:
@@ -1060,7 +1098,8 @@ def main():
               " · city = names the reader's city · date? = no date was given: confirm it is inside the window"
               " before using it · printed? = may be a fact a recent edition already printed: leave it out"
               " unless it brings something new · earlier? 11-13 = the same fact came out on that date,"
-              " before the window: probably a republication, leave it out unless it brings something new")
+              " before the window: probably a republication, leave it out unless it brings something new"
+              " · fit? = carries none of the section's keywords: use it only if the title or summary shows it fits")
     all_news = [n for lst in news.values() for n in lst]
     if all_news:
         with_summary = sum(1 for n in all_news if n["summary"])

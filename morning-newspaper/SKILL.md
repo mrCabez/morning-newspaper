@@ -61,7 +61,7 @@ These instructions are in English, but the newspaper is not. **Always work in th
 
 ## Edition flow
 
-Interactive run: say in one line that the edition takes a few minutes. Scheduled run: send nothing before the step 8 summary (not even that line), ask nothing, decide and go on; a task prompt that says "send no messages" means exactly this. Nobody is there to restart a scheduled run, so it never ends before step 8: a tool call that comes back not run, cancelled or empty is sent again (once), never answered with a reply.
+Interactive run: say in one line that the edition takes a few minutes. Scheduled run: send nothing before the step 8 summary (not even that line), ask nothing, decide and go on; a task prompt that says "send no messages" means exactly this. Nobody is there to restart a scheduled run, so it never ends before step 8: a tool call that comes back not run, cancelled or empty is sent again (once), never answered with a reply. A **catch-up run** (the task prompt says so) runs `collect.py` with `--catch-up`: `ALREADY PRINTED:` means today's edition is on the newsstand, so stop there, with no publish and no summary.
 
 Working folder: `newspaper/YYYY-MM-DD/` inside the session's current working folder (`pwd`), dated in the reader's timezone (WORK below). Skill folder: SKILL. Never a folder elsewhere such as `~/newspaper/`: the publishing tool only takes files from the working folder or the session's temporary folder. If the publishing tool names the one folder it reads files from (e.g. `/mnt/user-data/outputs/`), put `newspaper/YYYY-MM-DD/` inside that folder instead.
 
@@ -113,6 +113,7 @@ Use each section's `interest` and `count` from the config:
 - `recurring?`: a scheduled decision or figure (rate decision, inflation, jobs, GDP). Outlets republish these for days and the date shown is the republication's. Before using one, confirm with one web search (current month and year) that the decision or figure itself is inside the date window; if it is older, leave it out. For the headline, its extra research already does this. At most two such searches per edition: past that, leave the rest out.
 - `city`: the title names the reader's city. In the local section prefer these over stories from neighbouring towns.
 - `printed?`: the title looks like a fact a recent edition already printed, told by another outlet in other words. Leave it out unless it brings something new (a decision, a result, a number), and then say only what is new.
+- `fit?`: the story carries none of the section's `keywords`. Use it only if the title or summary shows that it fits the section's `interest`; otherwise leave it out (or the name-finding search of step 2, within its limit).
 - `earlier? 11-13`: the same searches also returned this fact from that date, before the window. It is probably a republication: treat it like `printed?`.
 - `SUMMARIES:` says how many candidates carry a summary. Google News search feeds send none, so most stories only have their title: their text restates it and nothing more (step 4).
 - `count` is per section and the headline does not count in it; `total_news` counts every story, headline included. A story may be printed in another section when it fits that section's `interest` better (a sandbox game that came in the tech results goes to games); it then counts there.
@@ -147,7 +148,7 @@ Write `WORK/edition.json` with the file-writing tool, in the reader's language, 
 ### 5. Assemble and check
 
 `python3 SKILL/scripts/assemble.py --skill SKILL --config WORK/config.json --work WORK --index WORK/index.json` (omit `--index` the first time; add `--single-page` in the single-page mode).
-- `ERROR:` → nothing was written. Fix the JSON and run again. It refuses when `WORK/collected.json` is missing (the collection is never skipped) and when the collection printed `NETWORK BLOCKED` but the no-network searches were not done (`references/no-network.md`).
+- `ERROR:` → nothing was written. Fix the JSON and run again. The same `ERROR:` after two fixes: remove the story or box it names and run again, so the edition still comes out. It refuses when `WORK/collected.json` is missing (the collection is never skipped) and when the collection printed `NETWORK BLOCKED` but the no-network searches were not done (`references/no-network.md`).
 - `WARNING:` → consider it; it does not block.
 - `CHECK:` → words in a printed item (names, numbers, a dropped hedge, or, when only the title backs a story, longer words that are not in it) that the collected text does not carry. Step 7 starts with these.
 - **Never cut the output** (`| head`, `| tail`, `grep`): it is short, and every line matters. Read it whole, every run.
