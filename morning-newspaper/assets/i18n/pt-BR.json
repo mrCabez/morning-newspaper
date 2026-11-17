@@ -97,5 +97,7 @@
  "shared_band": "Cópia para compartilhar",
  "shared_note_both": "Cópia para compartilhar: a agenda e os e-mails do leitor ficam de fora.",
  "shared_note_agenda": "Cópia para compartilhar: a agenda do leitor fica de fora.",
- "shared_note_mail": "Cópia para compartilhar: os e-mails do leitor ficam de fora."
+ "shared_note_mail": "Cópia para compartilhar: os e-mails do leitor ficam de fora.",
+ "newsstand_missing_note": "A banca indicada na tarefa agendada não foi encontrada, então esta edição não entrou nela.",
+ "newsstand_missing_no_config": "Sem a configuração da banca, não há seções de notícias hoje: só agenda, e-mails e extras."
 }

@@ -97,5 +97,7 @@
  "shared_band": "Copia para compartir",
  "shared_note_both": "Copia para compartir: la agenda y los correos del lector quedan fuera.",
  "shared_note_agenda": "Copia para compartir: la agenda del lector queda fuera.",
- "shared_note_mail": "Copia para compartir: los correos del lector quedan fuera."
+ "shared_note_mail": "Copia para compartir: los correos del lector quedan fuera.",
+ "newsstand_missing_note": "No se encontró el quiosco indicado en la tarea programada, así que esta edición no se añadió a él.",
+ "newsstand_missing_no_config": "Sin la configuración del quiosco no hay secciones de noticias hoy: solo agenda, correos y extras."
 }

@@ -31,6 +31,14 @@ How:
 - In step 5 add `--share` (copy to show) or `--standalone` (everything else). The page has no newsstand button, says at the top what was left out (`--share`), and no index is written.
 - Step 6 is skipped. Steps 7 (sentence-by-sentence check) and the `COVERAGE:` line still apply. In step 8 send the file the script printed and **say in one sentence that no newsstand was created and why**: the reader asked for it; this app has no way to keep a newsstand (no artifact tools); or publishing failed (say the error in plain words).
 
+## Newsstand not found
+
+When the slug or link given in the task or the request still cannot be read after a second try (`references/archive.md`). The reader's settings live in the newsstand's `config.json`, so what comes out depends on whether a copy exists elsewhere:
+- **A config in the task prompt or the request:** save it as `WORK/config.json` and make the full edition.
+- **No config anywhere:** a minimal edition, never a sample or a guess at their interests. Write `WORK/config.json` with only `language` (the language the task prompt or the request is written in, or the one it names) and `timezone` (the session's), and `"sections": []`. The collection then brings no news and no weather, only "On this day" and "Did you know?"; read the agenda and Gmail as usual. In `edition.json` leave `headline` and `sections` out.
+- No index exists, so this is No. 001 and the repeat checks see nothing: that is expected.
+- In step 5 add `--newsstand-missing` (it implies `--standalone`): the page says at the top that the newsstand was not found and, without a config, that there are no news sections. Skip step 6; steps 7 and 8 apply. In step 8 send the file and add one **Missing** line saying the newsstand given in the task was not found, so the edition was not added to it (and, without a config, why there is no news). Recreating the newsstand is the reader's decision: never do it in a scheduled run.
+
 ## No folder to write in
 
 If the working folder (SKILL.md, "Edition flow") cannot be created (read-only), use the session's temporary folder (`mktemp -d`) as WORK. If no folder can be written at all, there can be no edition: tell the reader in one sentence that the newspaper could not be printed because this session cannot save files, and stop.

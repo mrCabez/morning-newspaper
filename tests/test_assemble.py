@@ -942,3 +942,26 @@ def test_weather_condition_is_ignored_when_already_in_the_readers_language(assem
     proc = ok(assembler.run())
     page = next((proc.archive / "editions").glob("*.html")).read_text(encoding="utf-8")
     assert "Mostly sunny with breeze" in page
+
+
+def test_newsstand_missing_with_config_is_a_full_standalone_page(assembler):
+    """Edition 007 discussion: the task's newsstand is gone but a config exists → full paper, not published."""
+    proc = ok(assembler.run("--newsstand-missing"))
+    assert "NOT FOR THE NEWSSTAND" in proc.stdout and "PUBLISH" not in proc.stdout
+    page = standalone_page(assembler)
+    assert "The newsstand named in the scheduled task was not found" in page
+    assert "Without the newsstand's settings" not in page
+
+
+def test_newsstand_missing_without_config_is_a_minimal_page(assembler):
+    """No config anywhere: no sections, agenda and extras only, and the page says why there is no news."""
+    assembler.config["sections"] = []
+    assembler.config.pop("city", None)
+    for k in ("headline", "sections"):
+        assembler.edition.pop(k, None)
+    proc = ok(assembler.run("--newsstand-missing"))
+    assert "NOT FOR THE NEWSSTAND" in proc.stdout
+    page = standalone_page(assembler)
+    assert "The newsstand named in the scheduled task was not found" in page
+    assert html.escape("Without the newsstand's settings there are no news sections today") in page
+    assert "could be confirmed" not in page

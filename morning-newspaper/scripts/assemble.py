@@ -474,6 +474,8 @@ def build():
                     help="a single page that is not added to the newsstand (test or 'don't publish')")
     ap.add_argument("--share", action="store_true",
                     help="like --standalone, for showing other people: says on the page what was left out")
+    ap.add_argument("--newsstand-missing", action="store_true",
+                    help="the newsstand named in the task was not found: a standalone page that says so at the top")
     ap.add_argument("--single-page", action="store_true",
                     help="one page that replaces the previous one in the same artifact, carrying the reader's state")
     ap.add_argument("--replace", action="store_true",
@@ -489,7 +491,7 @@ def build():
     if sum(map(bool, (a.standalone, a.share, a.single_page))) > 1:
         ap.error("choose only one of --standalone, --share and --single-page")
     single = a.single_page
-    standalone = a.standalone or a.share or single
+    standalone = a.standalone or a.share or single or a.newsstand_missing
 
     errors, warnings = [], []
     with open(a.config, encoding="utf-8") as f:
@@ -760,6 +762,12 @@ def build():
         shared_note = L["shared_note_agenda"]
     elif a.share and not has_mail:
         shared_note = L["shared_note_mail"]
+    if a.newsstand_missing:
+        shared_note = L["newsstand_missing_note"]
+        if not cfg.get("sections"):
+            # The reader's config lives in the newsstand: without it there are no sections to fill,
+            # so "no confirmed news" would wrongly blame the news.
+            L = dict(L, no_news_text=L["newsstand_missing_no_config"])
 
     def fmt_date(fmt):
         return fmt.format(weekday=L["weekdays"][day.weekday()], day=day.day,

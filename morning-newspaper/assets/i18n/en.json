@@ -97,5 +97,7 @@
  "shared_band": "Copy to share",
  "shared_note_both": "Copy to share: the reader's agenda and emails are left out.",
  "shared_note_agenda": "Copy to share: the reader's agenda is left out.",
- "shared_note_mail": "Copy to share: the reader's emails are left out."
+ "shared_note_mail": "Copy to share: the reader's emails are left out.",
+ "newsstand_missing_note": "The newsstand named in the scheduled task was not found, so this edition was not added to it.",
+ "newsstand_missing_no_config": "Without the newsstand's settings there are no news sections today: only the agenda, emails and extras."
 }
