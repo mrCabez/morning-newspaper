@@ -29,7 +29,12 @@ Rules:
 - `ref` is a collected ID (`a1`, `b3`, `h2`…). URL, outlet and date are filled in automatically. For a story found outside the collection (fallback search), replace `ref` with `"url": "https://..."` and `"outlet": "Name"`.
 - The headline's section label is taken from its `ref`; set `"section"` only to override it.
 - Headline researched in another page: keep its `ref` (the repeat checks need it) and add `"url"` and `"outlet"` of the page whose facts you used. They replace the collected link and outlet in the printed source.
-- `icon` (headline illustration): `lock`, `chip`, `coin`, `chart`, `gamepad`, `city`, `robot` or `newspaper`.
+- `icon` (headline illustration): pick the one that fits the subject; an unknown name or none prints `newspaper`.
+  - Politics and society: `capitol` (government), `ballot` (elections), `gavel` (courts, justice), `shield` (security, defense), `megaphone` (protests, announcements), `people` (society, population), `globe` (world), `city` (city, region).
+  - Economy: `coin` (money, interest), `chart` (markets, indexes), `briefcase` (jobs), `cart` (shopping, retail), `fuel` (fuel prices), `bolt` (energy), `wheat` (farming), `house` (housing, real estate).
+  - Science and technology: `chip` (hardware), `robot` (AI), `lock` (cybersecurity), `phone` (phones, apps), `wifi` (internet), `flask` (science), `rocket` (space).
+  - Daily life: `heart` (health), `leaf` (environment), `thermometer` (weather, heat, cold), `book` (education, books), `car` (traffic, cars), `bus` (public transport), `plane` (flights, travel).
+  - Culture and sport: `gamepad` (games), `film` (cinema, TV), `music` (music), `ball` (sport, football), `trophy` (championships, awards), `newspaper` (anything else).
 - `weather`: omit to use the collected forecast; `false` removes the box; or an object `{"max": 27, "min": 17, "condition": "...", "icon": "cloud", "url": "https://..."}` from a fallback (icons: `sun`, `sun-cloud`, `cloud`, `rain`, `storm`, `snow`). `url` is the page the numbers came from, and only when there is one: a forecast from the app's own weather tool has none, so leave `url` out and set `"source": "<the tool's name, in a few words>"`. Never link a page the numbers did not come from. If the collected condition is in another language, set `weather_condition`.
 - Classifieds: `tag` is optional (defaults to the "reply wanted" label; use the `resolved` label for resolved ones). Links only to `https://mail.google.com/`; no amounts, codes or long numbers (the script refuses them).
 - Sample editions (scheduled run before setup, see `references/sample.md`) are made with `assemble.py --sample`; nothing changes in the JSON.

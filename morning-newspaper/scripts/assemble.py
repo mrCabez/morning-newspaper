@@ -51,6 +51,8 @@ SVG_WEATHER = {
     "snow": f'<path d="M9 26h25a8 8 0 0 0 0-16 10 10 0 0 0-19 3 7 7 0 0 0-6 13z" fill="#FBF6EC" stroke="#1E1B16" stroke-width="1.5"/><path d="M14 31v6M11 34h6M24 31v6M21 34h6M34 31v6M31 34h6" {_S}/>',
     "storm": f'<path d="M9 26h25a8 8 0 0 0 0-16 10 10 0 0 0-19 3 7 7 0 0 0-6 13z" fill="#FBF6EC" stroke="#1E1B16" stroke-width="1.5"/><path d="M23 28l-4 7h5l-3 7" {_S}/>',
 }
+_P = 'stroke="#1E1B16" stroke-width="1.5" fill="#FBF6EC"'
+_F = 'fill="#1E1B16"'
 SVG_ICON = {
     "lock": f'<rect x="14" y="26" width="28" height="22" {_S}/><path d="M19 26v-7a9 9 0 0 1 18 0v7M28 34v6" {_S}/>',
     "chip": f'<rect x="16" y="16" width="24" height="24" {_S}/><rect x="22" y="22" width="12" height="12" {_S}/><path d="M22 10v6M28 10v6M34 10v6M22 40v6M28 40v6M34 40v6M10 22h6M10 28h6M10 34h6M40 22h6M40 28h6M40 34h6" {_S}/>',
@@ -60,6 +62,34 @@ SVG_ICON = {
     "city": f'<path d="M8 46h40M12 46V24h10v22M22 46V14h12v32M34 46V28h10v18" {_S}/><path d="M16 29h2M16 35h2M26 19h4M26 25h4M26 31h4M38 33h2M38 39h2" {_S}/>',
     "robot": f'<rect x="14" y="20" width="28" height="22" {_S}/><path d="M28 12v8M10 28v8M46 28v8M22 36h12" {_S}/><circle cx="28" cy="11" r="2" {_S}/><circle cx="22" cy="29" r="2.5" {_S}/><circle cx="34" cy="29" r="2.5" {_S}/>',
     "newspaper": f'<rect x="10" y="12" width="36" height="32" {_S}/><path d="M16 20h24M16 26h10M16 32h10M16 38h10M30 26h10v12H30z" {_S}/>',
+    "heart": f'<path d="M28 46C16 37 9 30 9 21a9 9 0 0 1 19-4 9 9 0 0 1 19 4c0 9-7 16-19 25z" {_S}/><path d="M13 27h8l3-6 5 12 3-6h11" {_S}/>',
+    "ball": f'<circle cx="28" cy="28" r="18" {_S}/><path d="M28 21l6 4.5-2.3 7h-7.4L22 25.5z" {_S}/><path d="M28 21V10M34 25.5l10-3.5M31.7 32.5l6 8.5M24.3 32.5l-6 8.5M22 25.5l-10-3.5" {_S}/>',
+    "trophy": f'<path d="M19 10h18v12a9 9 0 0 1-18 0z" {_S}/><path d="M19 14h-6a6 6 0 0 0 6 8M37 14h6a6 6 0 0 1-6 8M28 31v7M18 46h20M22 46l2-8h8l2 8" {_S}/>',
+    "leaf": f'<path d="M12 44C12 24 24 12 44 12c0 20-12 32-32 32z" {_S}/><path d="M12 44L36 20M22 34v-8M28 28h8" {_S}/>',
+    "globe": f'<circle cx="28" cy="28" r="18" {_S}/><ellipse cx="28" cy="28" rx="8" ry="18" {_S}/><path d="M10 28h36M13 19h30M13 37h30" {_S}/>',
+    "gavel": f'<g transform="rotate(45 22 18)"><rect x="10" y="11" width="24" height="12" {_S}/><path d="M14 11v12M30 11v12M22 23v22" {_S}/></g><path d="M26 48h22M29 48v-5h16v5" {_S}/>',
+    "ballot": f'<path d="M22 21V8h12v13" {_S}/><path d="M25 14l2.5 2.5 4-4" {_S}/><path d="M10 26l4-6h28l4 6v20H10z" {_S}/><path d="M10 26h36M21 23h14" {_S}/>',
+    "capitol": f'<path d="M12 22h32L28 12z M8 46h40M10 42h36" {_S}/><path d="M15 22v20M23 22v20M33 22v20M41 22v20" {_S}/>',
+    "car": f'<path d="M8 38v-8l6-2 5-8h18l6 8 5 2v8z" {_S}/><path d="M23 28h12" {_S}/><circle cx="17" cy="38" r="4" {_P}/><circle cx="39" cy="38" r="4" {_P}/>',
+    "plane": f'<path d="M28 8c2 0 3 2 3 5v9l15 9v4l-15-4v9l5 4v3l-8-2-8 2v-3l5-4v-9l-15 4v-4l15-9v-9c0-3 1-5 3-5z" {_S}/>',
+    "bus": f'<rect x="14" y="10" width="28" height="32" rx="4" {_S}/><path d="M14 30h28M14 18h28M19 36h2M35 36h2M18 42v4M38 42v4" {_S}/>',
+    "book": f'<path d="M28 16c-5-4-12-5-18-4v30c6-1 13 0 18 4 5-4 12-5 18-4V12c-6-1-13 0-18 4zM28 16v30" {_S}/>',
+    "flask": f'<path d="M22 10h12M25 10v12L13 42a3 3 0 0 0 3 4h24a3 3 0 0 0 3-4L31 22V10" {_S}/><path d="M18 34h20" {_S}/><circle cx="25" cy="40" r="1.5" {_F}/><circle cx="31" cy="38" r="1.5" {_F}/>',
+    "rocket": f'<path d="M28 8c7 6 9 15 7 26H21c-2-11 0-20 7-26z" {_S}/><circle cx="28" cy="20" r="3" {_S}/><path d="M21 27l-6 6v7l7-4M35 27l6 6v7l-7-4M25 38l3 8 3-8" {_S}/>',
+    "film": f'<rect x="10" y="24" width="36" height="22" {_S}/><path d="M10 24v-8h36v8M18 16l-4 8M26 16l-4 8M34 16l-4 8M42 16l-4 8" {_S}/>',
+    "music": f'<path d="M22 40V14l20-4v26M22 20l20-4" {_S}/><circle cx="17" cy="40" r="5" {_S}/><circle cx="37" cy="36" r="5" {_S}/>',
+    "phone": f'<rect x="18" y="8" width="20" height="40" rx="3" {_S}/><path d="M18 14h20M18 40h20M26 44h4" {_S}/>',
+    "house": f'<path d="M10 26L28 10l18 16M14 23v23h28V23" {_S}/><path d="M24 46V34h8v12" {_S}/>',
+    "cart": f'<path d="M8 12h6l5 24h22l4-16H16" {_S}/><circle cx="22" cy="42" r="3" {_S}/><circle cx="38" cy="42" r="3" {_S}/>',
+    "bolt": f'<path d="M31 8L15 31h11l-3 17 18-24H30z" {_S}/>',
+    "briefcase": f'<rect x="10" y="18" width="36" height="26" {_S}/><path d="M22 18v-5h12v5M10 28h36M25 28v4h6v-4" {_S}/>',
+    "shield": f'<path d="M28 9l16 6v11c0 10-7 17-16 21-9-4-16-11-16-21V15z" {_S}/><path d="M21 28l5 5 10-10" {_S}/>',
+    "wheat": f'<path d="M28 48V14" {_S}/><path d="M28 22c-5 0-8-3-8-7 5 0 8 3 8 7zM28 22c5 0 8-3 8-7-5 0-8 3-8 7z" {_S}/><path d="M28 30c-5 0-8-3-8-7 5 0 8 3 8 7zM28 30c5 0 8-3 8-7-5 0-8 3-8 7z" {_S}/><path d="M28 38c-5 0-8-3-8-7 5 0 8 3 8 7zM28 38c5 0 8-3 8-7-5 0-8 3-8 7z" {_S}/><path d="M28 14c-2.5-2-2.5-5 0-7 2.5 2 2.5 5 0 7z" {_S}/>',
+    "fuel": f'<path d="M10 46h24M14 46V12h16v34M14 24h16M30 20h5l5 5v14a3 3 0 0 1-6 0v-8h-4" {_S}/>',
+    "wifi": f'<path d="M10 22a26 26 0 0 1 36 0M16 29a17 17 0 0 1 24 0M22 36a8 8 0 0 1 12 0" {_S}/><circle cx="28" cy="42" r="2.5" {_F}/>',
+    "thermometer": f'<path d="M24 34V12a4 4 0 0 1 8 0v22a8 8 0 1 1-8 0z" {_S}/><circle cx="28" cy="40" r="3" {_F}/><path d="M28 37V20M36 16h4M36 22h4M36 28h4" {_S}/>',
+    "megaphone": f'<path d="M10 24v8h6l20 10V14L16 24zM16 24v8" {_S}/><path d="M17 33l3 11h5l-2-9M42 22v12" {_S}/>',
+    "people": f'<circle cx="21" cy="20" r="6" {_S}/><circle cx="37" cy="22" r="5" {_S}/><path d="M9 44c0-8 5-13 12-13s12 5 12 13M33 33c1-1 2-1 4-1 5 0 9 4 9 12" {_S}/>',
 }
 
 

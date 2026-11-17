@@ -877,3 +877,25 @@ def test_summary_says_inbox_up_to_date(assembler):
     ok(assembler.run())
     entry = assembler.new_index()["editions"][0]
     assert "inbox up to date" in entry["summary"]
+
+
+def test_headline_icons_match_the_instructions():
+    """Every icon the instructions offer has a drawing, every drawing is offered, and each is valid SVG."""
+    import importlib.util
+    import xml.dom.minidom
+    from conftest import SKILL
+    spec = importlib.util.spec_from_file_location("assemble_icons", SCRIPTS / "assemble.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    drawn = set(mod.SVG_ICON)
+    skill_line = next(l for l in (SKILL / "SKILL.md").read_text(encoding="utf-8").splitlines() if "`icon`:" in l)
+    in_skill = set(re.findall(r"`([a-z-]+)`", skill_line.split("`icon`:", 1)[1].split("(topics", 1)[0]))
+    fmt = (SKILL / "references" / "edition-format.md").read_text(encoding="utf-8")
+    block = fmt.split("- `icon` (headline illustration)", 1)[1].split("\n- ", 1)[0]
+    in_format = set(re.findall(r"`([a-z-]+)` \(", block))
+    assert in_skill == drawn, (in_skill ^ drawn)
+    assert in_format == drawn, (in_format ^ drawn)
+    assert len(drawn) >= 30
+    for name, drawing in mod.SVG_ICON.items():
+        xml.dom.minidom.parseString(mod.svg(drawing, 56))
+        assert "{" not in drawing and "}" not in drawing, name
