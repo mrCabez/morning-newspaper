@@ -61,7 +61,7 @@ These instructions are in English, but the newspaper is not. **Always work in th
 
 ## Edition flow
 
-Interactive run: say in one line that the edition takes a few minutes. Scheduled run: send nothing before the step 8 summary (not even that line), ask nothing, decide and go on; a task prompt that says "send no messages" means exactly this. Nobody is there to restart a scheduled run, so it never ends before step 8: a tool call that comes back not run, cancelled or empty is sent again (once), never answered with a reply. A **catch-up run** (the task prompt says so) runs `collect.py` with `--catch-up`: `ALREADY PRINTED:` means today's edition is on the newsstand, so stop there, with no publish and no summary.
+Interactive run: say in one line that the edition takes a few minutes. Scheduled run: send nothing before the step 8 summary (not even that line), ask nothing, decide and go on; a task prompt that says "send no messages" means exactly this. Nobody is there to restart a scheduled run, so it never ends before step 8: a tool call that comes back not run, cancelled or empty is sent again (once), never answered with a reply.
 
 Working folder: `newspaper/YYYY-MM-DD/` inside the session's current working folder (`pwd`), dated in the reader's timezone (WORK below). Skill folder: SKILL. Never a folder elsewhere such as `~/newspaper/`: the publishing tool only takes files from the working folder or the session's temporary folder. If the publishing tool names the one folder it reads files from (e.g. `/mnt/user-data/outputs/`), put `newspaper/YYYY-MM-DD/` inside that folder instead.
 

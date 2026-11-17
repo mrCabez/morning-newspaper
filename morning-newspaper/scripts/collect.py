@@ -988,8 +988,6 @@ def main():
     ap.add_argument("--date", help="YYYY-MM-DD (default: today in the reader's timezone)")
     ap.add_argument("--from-results", metavar="FILE",
                     help="no network: filter and rank the web search results in FILE instead of fetching")
-    ap.add_argument("--catch-up", action="store_true",
-                    help="catch-up run: if today's edition is already on the newsstand, stop before collecting")
     a = ap.parse_args()
     start_log(a.work, "collect.py")
 
@@ -1029,13 +1027,6 @@ def main():
     number = max([e.get("number") or e.get("numero") or 0 for e in previous] + [0]) + 1
     reissue = next((e.get("number") or e.get("numero") for e in editions
                     if (e.get("date") or e.get("data")) == day.isoformat()), None)
-
-    if a.catch_up and reissue:
-        # A second scheduled task later in the morning, for the days the first run never finished
-        # (cut short, usage limit, publishing refused). Most days the paper is there: cost ~nothing.
-        print(f"ALREADY PRINTED: No. {reissue:03d} is on the newsstand for {day.isoformat()}. "
-              "Catch-up run: stop here, publish nothing and send nothing.")
-        return 0
 
     problems, did_you_know = [], []
     if a.from_results:

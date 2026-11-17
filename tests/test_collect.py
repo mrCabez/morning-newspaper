@@ -930,16 +930,3 @@ def test_did_you_know_tries_the_readers_language_first(collect_module, offline, 
     assert calls[0][0].startswith("https://pt.wikipedia.org/w/api.php") and calls[0][1] == 1
     assert not any("en.wikipedia.org" in u for u, _ in calls)
 
-
-def test_catch_up_run_stops_when_todays_edition_is_printed(tmp_path, config):
-    """A later catch-up task costs nothing on the days the 7:00 run finished."""
-    import subprocess, sys
-    cfg = tmp_path / "config.json"
-    cfg.write_text(json.dumps(config), encoding="utf-8")
-    idx = tmp_path / "index.json"
-    idx.write_text(json.dumps({"editions": [{"date": "2026-11-17", "number": 7, "headline": "X"}]}), encoding="utf-8")
-    proc = subprocess.run([sys.executable, "-I", str(ROOT / "morning-newspaper" / "scripts" / "collect.py"), "--config", str(cfg), "--work",
-                           str(tmp_path / "w"), "--index", str(idx), "--date", "2026-11-17", "--catch-up"],
-                          capture_output=True, text=True, timeout=30)
-    assert proc.returncode == 0 and "ALREADY PRINTED: No. 007" in proc.stdout
-    assert "WEATHER" not in proc.stdout  # stopped before any network access
