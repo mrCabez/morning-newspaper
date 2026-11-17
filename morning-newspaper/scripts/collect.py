@@ -45,7 +45,7 @@ try:
 except Exception:  # pragma: no cover
     ZoneInfo = None
 
-UA = "morning-newspaper/1.10.0 (personal newspaper; RSS reader)"
+UA = "morning-newspaper/1.10.0 (+github.com/oantuneshenriqueo/morning-newspaper; personal newspaper; RSS reader)"
 TIMEOUT = 12
 MAX_BYTES = 5_000_000
 # Stories are only compared against the latest editions: a headline from months ago must not
@@ -70,6 +70,41 @@ DYK_THEMES = [
     "history of the mouse, touchscreen or another input device", "a curiosity about databases",
     "the origin of a tech company's name", "how undersea cables or satellites carry data",
 ]
+
+# English Wikipedia articles per theme, read through the cached page-summary endpoint when the
+# search API refuses (it answers 429 to shared cloud addresses far more often than page summaries
+# do). Themes without seeds (and the reader's own themes) only use the search.
+DYK_SEEDS = {
+    'origin of a programming language': ['Python (programming language)', 'C (programming language)', 'Lua (programming language)', 'Ruby (programming language)', 'COBOL', 'Go (programming language)', 'Java (programming language)', 'BASIC'],
+    'how a piece of everyday hardware works inside': ['Hard disk drive', 'Solid-state drive', 'Lithium-ion battery', 'Inkjet printing', 'Laser printing', 'Microwave oven', 'Quartz clock', 'Optical mouse'],
+    'history of a file format or protocol': ['JPEG', 'GIF', 'PDF', 'MP3', 'ZIP (file format)', 'HTTP', 'Domain Name System', 'Simple Mail Transfer Protocol'],
+    "origin of a computing term (not 'bug')": ['HTTP cookie', 'Computer virus', 'Spooling', 'Booting', 'Pixel', 'Wiki', 'Firewall (computing)', 'Patch (computing)'],
+    'a curious record in computing': ['Largest known prime number', 'ENIAC', "Moore's law", 'Year 2038 problem', 'Colossus computer', 'Manchester Baby'],
+    'early video game history': ['Tennis for Two', 'Spacewar!', 'Pong', 'Magnavox Odyssey', 'Computer Space', 'Colossal Cave Adventure', 'Atari 2600', 'OXO (video game)'],
+    "how the internet's infrastructure works": ['Internet exchange point', 'Border Gateway Protocol', 'Root name server', 'Content delivery network', 'IPv6', 'Packet switching'],
+    'history of a famous algorithm': ["Dijkstra's algorithm", 'Quicksort', 'Fast Fourier transform', 'PageRank', 'RSA cryptosystem', 'Euclidean algorithm'],
+    'cryptography and codes through history': ['Enigma machine', 'Caesar cipher', 'Vigenère cipher', 'Code talker', 'Zimmermann Telegram', 'One-time pad', 'Voynich manuscript'],
+    'space missions and their computers': ['Voyager 1', 'Mars Pathfinder', 'Ariane flight V88', 'Mars Climate Orbiter', 'Hubble Space Telescope', 'Ingenuity (helicopter)'],
+    'history of a keyboard key or symbol': ['At sign', 'Ampersand', 'Number sign', 'Esc key', 'Tab key', 'Interrobang', 'Backslash', 'Pilcrow'],
+    'how a common app feature was invented': ['Hyperlink', 'Cut, copy, and paste', 'Undo', 'Emoji', 'Autocomplete', 'Pull-to-refresh', 'Scroll wheel'],
+    'storage media history': ['Floppy disk', 'Punched card', 'Magnetic-tape data storage', 'Compact disc', 'Zip drive', 'USB flash drive', 'Drum memory'],
+    'a programming convention and where it came from': ['Camel case', 'Indentation style', 'Magic number (programming)', 'Off-by-one error', 'Foobar', 'Zero-based numbering'],
+    'history of an operating system': ['MS-DOS', 'Linux', 'Classic Mac OS', 'BeOS', 'OS/2', 'Android (operating system)', 'Multics'],
+    'how GPS, Wi-Fi or Bluetooth works': ['Global Positioning System', 'Wi-Fi', 'Bluetooth', 'Harald Bluetooth', 'Hedy Lamarr', 'Frequency-hopping spread spectrum'],
+    'open-source software history': ['GNU Project', 'Debian', 'Free Software Foundation', 'GNU General Public License', 'Apache HTTP Server', 'Mozilla', 'Linux kernel', 'Wikipedia'],
+    'a surprising fact about electricity or batteries': ['Baghdad Battery', 'Voltaic pile', 'War of the currents', 'Leyden jar', 'Electric eel', 'Static electricity'],
+    'the science behind a screen technology': ['Cathode-ray tube', 'Liquid-crystal display', 'OLED', 'Plasma display', 'Electronic paper', 'Quantum dot display'],
+    'history of artificial intelligence before 2000': ['ELIZA', 'Dartmouth workshop', 'Perceptron', 'Deep Blue (chess computer)', 'SHRDLU', 'AI winter', 'Shakey the robot'],
+    'a famous software failure and its lesson': ['Therac-25', 'Year 2000 problem', 'Pentium FDIV bug', 'Morris worm', 'Northeast blackout of 2003', 'Patriot missile'],
+    'units and numbers in computing (bytes, hertz, binary)': ['Byte', 'Nibble', 'Hertz', 'Binary number', 'Binary prefix', "Two's complement"],
+    'the history of email or the web': ['Mosaic (web browser)', 'Usenet', 'Emoticon', 'Netscape Navigator', 'Webmail', 'Browser wars'],
+    'an invention that came from a game or a toy': ['Silly Putty', 'Play-Doh', 'Super Soaker', 'Slinky', "Rubik's Cube", 'Graphics processing unit'],
+    'how data compression works': ['Huffman coding', 'Lempel–Ziv–Welch', 'LZ77 and LZ78', 'Run-length encoding', 'Discrete cosine transform', 'Arithmetic coding'],
+    'history of the mouse, touchscreen or another input device': ['Trackball', 'Touchscreen', 'Light pen', 'Graphics tablet', 'Joystick', 'Stylus (computing)'],
+    'a curiosity about databases': ['Relational database', 'SQL', 'Edgar F. Codd', 'IBM System R', 'B-tree', 'Oracle Database'],
+    "the origin of a tech company's name": ['Googol', 'Amazon (company)', 'Nintendo', 'Samsung', 'Yahoo', 'Adobe Inc.', 'Sony', 'Lenovo'],
+    'how undersea cables or satellites carry data': ['Submarine communications cable', 'Transatlantic telegraph cable', 'Communications satellite', 'Geostationary orbit', 'Telstar', 'Starlink'],
+}
 
 
 def link_id(url):
@@ -102,38 +137,65 @@ def wiki_lang(cfg):
 def collect_did_you_know(cfg, day, used):
     """'Did you know?' candidates (k1, k2…): Wikipedia articles on today's theme, with their summary.
     Like "On this day", Wikipedia counts as confirmation, so the model needs no search or page of
-    its own. Tries the reader's Wikipedia first, then English."""
+    its own. A built-in theme first reads its seed articles (English Wikipedia's cached page
+    summaries, which answer even when the search API refuses with 429); a theme without seeds, or
+    seeds already used up, falls back to searching the reader's Wikipedia, then English."""
     themes = cfg.get("did_you_know_themes") or DYK_THEMES
-    query = theme_query(dyk_theme(cfg, day))
-    offset = (day.toordinal() // len(themes)) % 3 * 4  # the next time the theme comes back, other articles
-    reader = wiki_lang(cfg)
+    theme = dyk_theme(cfg, day)
     used_n = [u for u in used if u]
-    cands = []
-    for lang in dict.fromkeys([reader, "en"]):
-        q = urllib.parse.urlencode({"action": "query", "list": "search", "srsearch": query, "srlimit": 4,
-                                    "sroffset": offset, "srnamespace": 0, "format": "json"})
-        hits = json.loads(fetch(f"https://{lang}.wikipedia.org/w/api.php?{q}")).get("query", {}).get("search", [])
-        titles = [h["title"] for h in hits if h.get("title")]
-
-        def summary(title, lang=lang):
-            path = urllib.parse.quote(title.replace(" ", "_"), safe="")
-            return json.loads(fetch(f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{path}"))
-
-        with cf.ThreadPoolExecutor(max_workers=2) as ex:  # Wikipedia answers 429 to bursts
-            pages = list(ex.map(lambda t: _safe(summary, t), titles))
-        for title, page in zip(titles, pages):
-            if not page or page.get("type") == "disambiguation":
-                continue
-            text = clean(page.get("extract") or "", 480)
-            url = ((page.get("content_urls") or {}).get("desktop") or {}).get("page", "")
-            if len(text) < 200 or not url.startswith("https://"):
-                continue
-            if any(same_story(title, u) or same_story(text, u) for u in used_n):
-                continue
-            cands.append({"title": title, "text": text, "url": url, "lang": lang})
+    cands, errors = [], []
+    seeds = DYK_SEEDS.get(theme) or []
+    if seeds:
+        start = (day.toordinal() // len(themes)) % len(seeds)  # other articles the next time around
+        cands += wiki_summaries("en", (seeds[start:] + seeds[:start])[:4], used_n, want=3)
+    query = theme_query(theme)
+    offset = (day.toordinal() // len(themes)) % 3 * 4  # the next time the theme comes back, other articles
+    for lang in dict.fromkeys([wiki_lang(cfg), "en"]):
         if len(cands) >= 2:
             break
+        q = urllib.parse.urlencode({"action": "query", "list": "search", "srsearch": query, "srlimit": 4,
+                                    "sroffset": offset, "srnamespace": 0, "format": "json"})
+        # The search answers 429 to short bursts from shared cloud addresses: wait and try again,
+        # and if this language still fails, go on to the next one instead of giving up.
+        try:
+            hits = json.loads(fetch(f"https://{lang}.wikipedia.org/w/api.php?{q}", tries=3)).get("query", {}).get("search", [])
+        except Exception as e:
+            errors.append(e)
+            continue
+        known = {c["title"] for c in cands}
+        titles = [h["title"] for h in hits if h.get("title") and h["title"] not in known
+                  and not re.match(LIST_ARTICLE, h["title"], re.I)]
+        cands += wiki_summaries(lang, titles, used_n, want=3 - len(cands))
+    if not cands and errors:
+        raise errors[-1]  # reported in FAILURES with its HTTP code
     return [{"id": f"k{i}", **c} for i, c in enumerate(cands[:3], 1)]
+
+
+# Lists, comparisons and indexes tell no single fact ("List of free and open-source software packages").
+LIST_ARTICLE = (r"(list|lists|comparison|index|outline|timeline|glossary) of\b|(lista|listas|comparação|"
+                          r"comparación|índice|cronologia|cronología|glossário|glosario) d")
+
+
+def wiki_summaries(lang, titles, used_n, want=3):
+    """Page summaries of these articles, one at a time (Wikipedia answers 429 to bursts), skipping
+    disambiguations, short extracts and facts already printed; stops once it has `want`."""
+    out = []
+    for title in titles:
+        if len(out) >= want:
+            break
+        path = urllib.parse.quote(title.replace(" ", "_"), safe="")
+        page = _safe(lambda: json.loads(fetch(f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{path}", tries=3)))
+        if not page or page.get("type") == "disambiguation":
+            continue
+        text = clean(page.get("extract") or "", 480)
+        url = ((page.get("content_urls") or {}).get("desktop") or {}).get("page", "")
+        if len(text) < 150 or not url.startswith("https://"):
+            continue
+        name = page.get("title") or title
+        if any(same_story(name, u) or same_story(text, u) for u in used_n):
+            continue
+        out.append({"title": name, "text": text, "url": url, "lang": lang})
+    return out
 
 
 def _safe(fn, *args):
@@ -162,7 +224,16 @@ def fetch(url, tries=2):
         except urllib.error.HTTPError as e:
             if n + 1 >= tries or e.code not in (429, 500, 502, 503, 504):
                 raise
-            time.sleep(2 + 2 * n)
+            time.sleep(retry_wait(e, n))
+
+
+def retry_wait(err, n):
+    """Seconds before the next try: the server's Retry-After when it gives one (capped at 10 s, so
+    the edition never stalls), else 2 s, 4 s, 6 s…"""
+    try:
+        return min(10.0, max(1.0, float((err.headers or {}).get("Retry-After"))))
+    except (TypeError, ValueError, AttributeError):
+        return 2 + 2 * n
 
 
 def words(txt):
@@ -271,6 +342,22 @@ def printed_before(title, past_titles, city=""):
     return False
 
 
+def seen_earlier(title, older):
+    """Date (MM-DD) of an older story, from the same searches, that tells the same fact: a small
+    outlet's "Google launches X" today when bigger ones covered X days ago. Stricter than related()
+    (3 shared words), since ongoing subjects ("Tesouro Direto taxas") come back every day. Only a
+    hint (earlier?), nothing is dropped because of it."""
+    mine = stems(title)
+    if len(mine) < 3:
+        return None
+    for old_title, when in older:
+        other = stems(old_title)
+        shared = mine & other
+        if len(shared) >= 3 and len(shared) / min(len(mine), len(other)) >= 0.5:
+            return when
+    return None
+
+
 def outlet_key(name):
     return " ".join(words(name))
 
@@ -330,7 +417,10 @@ def other_month(title, day):
 # "recurring_terms" in config.json. Whole words, compared without accents.
 RECURRING = ["copom", "selic", "ipca", "inpc", "igp m", "caged", "pnad", "fomc", "fed", "federal reserve",
              "banxico", "ecb", "bce", "interest rate", "interest rates", "taxa de juros", "tasa de interes",
-             "inflation", "inflacao", "inflacion", "cpi", "payroll", "jobs report", "pib", "gdp"]
+             "inflation", "inflacao", "inflacion", "cpi", "payroll", "jobs report", "pib", "gdp",
+             # rate moves named without "rate of" ("Alta de juros nos EUA faz dólar disparar")
+             "juros", "tasas de interes", "tipos de interes", "rate hike", "rate hikes", "rate cut", "rate cuts",
+             "rate decision"]
 
 
 def recurring(title, extra=()):
@@ -515,6 +605,11 @@ def rank_news(cfg, task_sections, results, window_h, now, used_links, used_title
     undated_last = dt.datetime.min.replace(tzinfo=dt.timezone.utc)
     pre = prefixes(cfg["sections"])
     out = {}
+    # Stories the searches returned from before the window, oldest first: a candidate that tells
+    # one of these facts is probably a republication (flagged "earlier? MM-DD").
+    older = sorted(((it["title"], it["date"]) for res in results for it in res
+                    if it.get("date") is not None and it["date"] < cutoff), key=lambda x: x[1])
+    older = [(t, d.astimezone(tz).strftime("%m-%d")) for t, d in older[-400:]]
     # Groups of stories that may tell the same fact, across sections. A story joins a group only if
     # it looks like every story already in it, and is marked with the group's first ID: no chains
     # (b8≈b7≈b6) that would lump different facts together.
@@ -578,6 +673,9 @@ def rank_news(cfg, task_sections, results, window_h, now, used_links, used_title
                 groups.append({"id": n["id"], "titles": [it["title"]]})
             if used_titles and printed_before(it["title"], used_titles, city):
                 flags.append("printed?")
+            earlier = seen_earlier(it["title"], older) if it["date"] is not None else None
+            if earlier:
+                flags.append(f"earlier? {earlier}")
             if other_month(it["title"], now.date()):
                 flags.append("old month?")
             elif recurring(it["title"], cfg.get("recurring_terms") or []):
@@ -927,7 +1025,7 @@ def main():
             try:
                 did_you_know = collect_did_you_know(cfg, day, used_didyouknow)
             except Exception as e:
-                failures.append(f"did_you_know: wikipedia ({type(e).__name__})")
+                failures.append(f"did_you_know: wikipedia ({type(e).__name__} {getattr(e, 'code', '')})".replace(" )", ")"))
 
     # Nothing at all could be reached (Claude's network access is off or limited): say it in one
     # line so the model switches to the no-network mode instead of reading a dozen failures.
@@ -961,7 +1059,13 @@ def main():
               " the date shown may be a republication, confirm the event date before using it"
               " · city = names the reader's city · date? = no date was given: confirm it is inside the window"
               " before using it · printed? = may be a fact a recent edition already printed: leave it out"
-              " unless it brings something new")
+              " unless it brings something new · earlier? 11-13 = the same fact came out on that date,"
+              " before the window: probably a republication, leave it out unless it brings something new")
+    all_news = [n for lst in news.values() for n in lst]
+    if all_news:
+        with_summary = sum(1 for n in all_news if n["summary"])
+        print(f"SUMMARIES: {with_summary} of {len(all_news)} candidates have one (shown after —); the others"
+              " carry only their title (Google News search feeds send no summary), so their text only restates it")
     for sec in cfg["sections"]:
         print(f"\n[{sec['id']}] {sec['title']}")
         for n in news.get(sec["id"], []):

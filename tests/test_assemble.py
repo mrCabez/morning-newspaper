@@ -899,3 +899,46 @@ def test_headline_icons_match_the_instructions():
     for name, drawing in mod.SVG_ICON.items():
         xml.dom.minidom.parseString(mod.svg(drawing, 56))
         assert "{" not in drawing and "}" not in drawing, name
+
+
+# ---------------------------------------------------------------- debug of edition 007
+
+def _assemble_mod():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("assemble_mod", SCRIPTS / "assemble.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_attribution_to_the_collected_outlet_is_not_a_check():
+    """'Segundo o BPMoney, …' names the story's own outlet; it is not a fact from memory."""
+    mod = _assemble_mod()
+    src = "Hackers invadem software da Luxor e desviam recompensas de mineração de Bitcoin BPMoney"
+    assert mod.unsupported(["Segundo o BPMoney, hackers invadiram um software da Luxor."], src, True) == []
+    assert mod.unsupported(["Segundo o Valor, hackers invadiram um software da Luxor."], src, True)
+
+
+def test_country_short_and_full_names_match():
+    mod = _assemble_mod()
+    src = "Alta de juros nos EUA faz dólar disparar Jornal do Brasil"
+    assert mod.unsupported(["A alta de juros nos Estados Unidos fez o dólar disparar."], src, True) == []
+    assert mod.unsupported(["Os Estados Unidos usam a soja."], "Soja sobe em Chicago; fala-se de nós", True)
+
+
+def test_another_tense_of_a_title_word_is_not_a_check():
+    mod = _assemble_mod()
+    src = "Volta da Preguiça ganha rota de cicloturismo de 12 km na zona rural de Divinópolis"
+    assert mod.unsupported(["A Volta da Preguiça, na zona rural de Divinópolis, ganhou uma rota de "
+                            "cicloturismo de 12 km."], src, True) == []
+
+
+def test_weather_condition_is_ignored_when_already_in_the_readers_language(assembler):
+    assembler.edition["weather_condition"] = "Mostly sunny with breeze"
+    proc = ok(assembler.run())  # the sample's condition is already English, like the config
+    page = next((proc.archive / "editions").glob("*.html")).read_text(encoding="utf-8")
+    assert "Partly cloudy" in page and "Mostly sunny with breeze" not in page
+    assembler.collected["weather"]["condition_lang"] = "es"
+    proc = ok(assembler.run())
+    page = next((proc.archive / "editions").glob("*.html")).read_text(encoding="utf-8")
+    assert "Mostly sunny with breeze" in page

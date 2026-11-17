@@ -250,11 +250,31 @@ STOP_CAPS = {"o", "a", "os", "as", "um", "uma", "the", "el", "la", "los", "las",
              "da", "and", "e", "y", "in", "on", "of", "por", "para", "com", "con", "with", "un", "una", "an"}
 
 
+# Words that only attribute a fact to its outlet ("Segundo o BPMoney, …"): the rules ask for this
+# when only a small outlet backs a story, so they never count as facts the source lacks.
+ATTRIBUTION = {"segundo", "conforme", "according", "segun", "informa", "informou", "reporta", "relata",
+               "relatou", "afirma", "afirmou", "reports", "reported", "informo"}
+# Other names of a country the source names by its short form ("EUA" in the title, "Estados Unidos"
+# in the text). Short forms are matched in capitals only ("us" and "eu" are also everyday words).
+COUNTRY_NAMES = [(r"\b(?:EUA|EEUU|EE\. ?UU|USA)\b|\bU\.S\.|\bUS\b(?!\$)", r"estados unidos|united states",
+                  "Estados Unidos United States EUA EEUU USA"),
+                 (r"\bUK\b", r"reino unido|united kingdom", "Reino Unido United Kingdom UK"),
+                 (r"\bUE\b", r"uniao europeia|union europea|european union", "União Europeia Unión Europea European Union UE")]
+
+
+def with_country_names(source):
+    source = source or ""
+    extra = [names for short, full, names in COUNTRY_NAMES
+             if re.search(short, source) or re.search(full, _fold(source))]
+    return " ".join([source, *extra])
+
+
 def unsupported(written, source, empty_summary):
     """What step 7 must look at in one printed item: names and numbers the collected text does not
     carry, a hedge the source had and the text dropped and, when the summary was empty (only the
     title backs the story), longer words that are not in the title. A hint, never a block: a
     paraphrase is fine, a fact added from memory is not."""
+    source = with_country_names(source)
     src = _stems(source)
     src_words = set(re.findall(r"[a-z0-9]+", _fold(source)))
     notes = []
@@ -282,8 +302,10 @@ def unsupported(written, source, empty_summary):
         notes.append("the source hedges (" + ", ".join(sorted(src_words & HEDGES)) + ") and the text does not")
     if empty_summary:
         named = {_fold(n) for n in names}
+        src4 = {w[:4] for w in src}  # "ganhou" restates "ganha": same root, another tense
         extra = [w for w in re.findall(r"[a-z0-9]+", _fold(written))
-                 if len(w) >= 6 and w[:5] not in src and w not in named]
+                 if len(w) >= 6 and w[:5] not in src and w[:4] not in src4 and w not in named
+                 and w not in ATTRIBUTION]
         if extra:
             notes.append("only the title backs it; words not in the title: " + ", ".join(list(dict.fromkeys(extra))[:8]))
     return notes
@@ -681,7 +703,11 @@ def build():
     if weather and weather_url and not weather_url.startswith("https://"):
         errors.append(f"weather.url: not an https link ({weather_url[:60]}); leave \"url\" out when the "
                       "forecast has no page")
-    if weather and ed.get("weather_condition"):
+    # weather_condition only translates a collected condition that came in another language; one
+    # already in the reader's language is printed as collected.
+    reader_lang = str(cfg.get("language") or "en").split("-")[0].lower()
+    if weather and ed.get("weather_condition") and not (
+            not isinstance(ed.get("weather"), dict) and str(weather.get("condition_lang") or "").lower() == reader_lang):
         weather = dict(weather, condition=ed["weather_condition"])
 
     hist = ed.get("history") or {}
@@ -821,7 +847,8 @@ def build():
         base = refs.get(item.get("ref") or "")
         if not base:
             continue
-        source = " ".join(str(base.get(k) or "") for k in ("year", "title", "summary", "text", "extract"))
+        # The outlet counts as source text: "Segundo o BPMoney" names where the fact came from.
+        source = " ".join(str(base.get(k) or "") for k in ("year", "title", "summary", "text", "extract", "outlet"))
         written = [str(item.get(k) or "") for k in ("title", "deck", "text")]
         title_only = "id" in base and not (base.get("summary") or base.get("text") or base.get("extract"))
         for note in unsupported(written, source, title_only):

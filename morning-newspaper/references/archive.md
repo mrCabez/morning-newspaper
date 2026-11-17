@@ -27,7 +27,7 @@ Send the calls of this step together with step 0 and, as soon as the newsstand i
    - **The request or the scheduled task prompt carries a config** (older newsstands predate `config.json`): that config wins. Save it as `WORK/config.json`, print a normal edition (never a sample) and run `assemble.py` with `--with-config`, so the newsstand gets its `config.json`.
    - **No config anywhere:** the newsstand only holds sample editions. In a scheduled run, add another sample edition to it; in an interactive session, run setup and keep using this newsstand (see the end of `references/setup.md`).
 
-Then read `config.json` and `editions/index.json` from it into `WORK/config.json` and `WORK/index.json`.
+Then read `config.json` and `editions/index.json` from it into `WORK/config.json` and `WORK/index.json`. When the reading tool can save files to disk (an output folder), save them there instead of bringing their text into the conversation: the scripts read them from WORK, and the index alone can be several thousand tokens.
 
 **Legacy newsstands.** A newsstand made by an early version keeps its index at `edicoes/indice.json`. If `editions/index.json` exists, it always wins: ignore the legacy file. If only the legacy file exists, save it as `WORK/index.json`: `assemble.py` recognizes it, rewrites every entry with the current keys, prints `LEGACY NEWSSTAND MIGRATED` and adds `config.json` to the files to publish. Publish them all and, if the publishing tool can delete files, remove `edicoes/indice.json` in the same call (past edition pages under `edicoes/` stay where they are).
 

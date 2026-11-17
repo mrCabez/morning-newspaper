@@ -800,3 +800,85 @@ def test_printed_flag_reaches_the_candidates(collect_module, offline, config):
     news, _ = collect_module.collect_news(config, 48, NOW, set(),
                                           ["Bank confirms hackers leaked client records"], UTC)
     assert "printed?" in news["tech"][0].get("flags", [])
+
+
+# ---------------------------------------------------------------- debug of edition 007 (no network)
+
+def test_rate_moves_abroad_are_recurring(collect_module):
+    """c8 'Alta de juros nos EUA faz dólar disparar' named a rate decision without 'taxa de'."""
+    assert collect_module.recurring("Alta de juros nos EUA faz dólar disparar")
+    assert collect_module.recurring("Fed rate cut lifts stocks")
+    assert not collect_module.recurring("Juízes julgam recurso do sindicato")
+
+
+def test_republished_fact_is_flagged_with_its_earlier_date(collect_module, offline, config):
+    """a3: a small outlet dated 17/11 a launch that bigger outlets covered on 13/11."""
+    offline["news.google.com"] = rss(
+        ("Google lança Gemini 4 Hydrogen, modelo de IA voltado à velocidade", "https://n.example/new", 2, "Jornal Noroeste"),
+        ("Google apresenta o Gemini 4 Hydrogen, modelo de IA mais rápido", "https://n.example/old", 96, "Big Outlet"),
+        ("Tesouro Direto: taxas sobem nesta manhã", "https://n.example/t", 3, "A"))
+    config["sections"] = config["sections"][:1]
+    news, _ = collect_module.collect_news(config, 48, NOW, set(), [], UTC)
+    flags = {n["title"][:20]: n.get("flags", []) for n in news["tech"]}
+    assert flags["Google lança Gemini "] == ["earlier? 11-09"]
+    assert flags["Tesouro Direto: taxa"] == []
+
+
+def test_retry_wait_follows_retry_after(collect_module):
+    import urllib.error as ue
+    err = ue.HTTPError("u", 429, "slow down", {"Retry-After": "3"}, None)
+    assert collect_module.retry_wait(err, 0) == 3.0
+    assert collect_module.retry_wait(ue.HTTPError("u", 429, "x", {"Retry-After": "120"}, None), 0) == 10.0
+    assert collect_module.retry_wait(ue.HTTPError("u", 503, "x", {}, None), 1) == 4
+
+
+def test_did_you_know_falls_back_to_english_when_the_readers_wikipedia_fails(collect_module, offline, config):
+    import urllib.error as ue
+    config["language"] = "pt-BR"
+    long_text = "The protocol was designed in 1982 for a small network of universities. " * 4
+    offline["pt.wikipedia.org/w/api.php"] = ue.HTTPError("u", 429, "too many", {}, None)
+    offline["en.wikipedia.org/w/api.php"] = json.dumps({"query": {"search": [{"title": "Alpha"}]}})
+    offline["summary/Alpha"] = json.dumps({"type": "standard", "extract": long_text,
+                                           "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/Alpha"}}})
+    cands = collect_module.collect_did_you_know(config, dt.date(2026, 11, 17), used=[])
+    assert [(c["title"], c["lang"]) for c in cands] == [("Alpha", "en")]
+
+
+def test_did_you_know_failure_keeps_its_http_code(collect_module, offline, config):
+    import urllib.error as ue
+    offline["/w/api.php"] = ue.HTTPError("u", 429, "too many", {}, None)
+    with pytest.raises(ue.HTTPError):
+        collect_module.collect_did_you_know(config, dt.date(2026, 11, 17), used=[])
+
+
+def test_user_agent_names_a_contact(collect_module):
+    """Wikimedia throttles clients that give no way to reach whoever runs them."""
+    assert "github.com/oantuneshenriqueo/morning-newspaper" in collect_module.UA
+
+
+def test_did_you_know_uses_the_themes_seed_articles_when_search_is_refused(collect_module, offline, config):
+    """Edition 007: Wikipedia's search answered 429 while page summaries still worked."""
+    import urllib.error as ue
+    config["did_you_know_themes"] = ["open-source software history"]
+    long_text = "The project was announced on a mailing list and named after its two founders. " * 3
+    offline["/w/api.php"] = ue.HTTPError("u", 429, "too many", {}, None)
+    for title in collect_module.DYK_SEEDS["open-source software history"]:
+        offline["summary/" + title.replace(" ", "_")] = json.dumps(
+            {"type": "standard", "title": title, "extract": long_text,
+             "content_urls": {"desktop": {"page": "https://en.wikipedia.org/wiki/" + title.replace(" ", "_")}}})
+    cands = collect_module.collect_did_you_know(config, dt.date(2026, 11, 17), used=[])
+    assert 1 <= len(cands) <= 3 and cands[0]["id"] == "k1" and cands[0]["lang"] == "en"
+    assert all(c["title"] in collect_module.DYK_SEEDS["open-source software history"] for c in cands)
+
+
+def test_every_seed_theme_is_a_known_theme(collect_module):
+    assert set(collect_module.DYK_SEEDS) <= set(collect_module.DYK_THEMES)
+    assert all(len(v) >= 6 for v in collect_module.DYK_SEEDS.values())
+
+
+def test_list_articles_are_not_did_you_know_candidates(collect_module):
+    import re
+    for t in ["List of free and open-source software packages", "Comparison of open-source and closed-source software",
+              "Lista de distribuições Linux"]:
+        assert re.match(collect_module.LIST_ARTICLE, t, re.I)
+    assert not re.match(collect_module.LIST_ARTICLE, "Debian", re.I)

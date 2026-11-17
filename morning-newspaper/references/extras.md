@@ -12,11 +12,11 @@ Two boxes at the end of the edition, written in the reader's language. Both are 
 - Collected text is flattened: exponents and formulas lose their formatting (2^1398269 − 1 can arrive as "21398269−1"). Check numbers like these on the linked page, or leave them out.
 
 ## Did you know?
-- First choice: the collection's candidates (`k1`, `k2`…, Wikipedia articles on today's theme). Their text counts as confirmation: use `{"ref": "k1", "text": "…"}` and no search is needed. This section is for when none fits or none came (no network, Wikipedia down).
+- First choice: the collection's candidates (`k1`, `k2`…, Wikipedia articles on today's theme, sometimes from the English Wikipedia: write the fact in the reader's language). Their text counts as confirmation: use `{"ref": "k1", "text": "…"}` and no search is needed. This section is for when none fits or none came (no network, Wikipedia down).
 - Follow **today's theme**, printed by the collection (`[did_you_know] today's theme`). It rotates daily so the box stays varied. If the theme leaves no fresh fact (the facts it suggests are already used, or none is confirmed), widen it to any lesser-known fact about technology or science, never a default favorite.
 - Pick a lesser-known fact inside that theme. **Never use these overused classics:** the moth in the Harvard Mark II as the "first bug"; Ada Lovelace as the first programmer; QWERTY designed to slow typists; the first email or the first website; "640K ought to be enough"; the first computer mouse being made of wood; the Apollo guidance computer being weaker than a calculator or phone; the origin of the word "spam".
 - Do not repeat: the collection lists the ones already used (compare the subject, not just the wording).
-- Confirm it with a web search (at most two) and open a confirming page (fetch it): search result titles and the search tool's own summary do not confirm a fact. A page does not open: try the next result that states the fact, up to three pages in all. Put the URL of the page that confirmed it in `did_you_know.url`.
+- Confirm it with a web search (at most two) and open a confirming page (fetch it) **from those results**: search result titles and the search tool's own summary do not confirm a fact, and a page whose address you made up yourself is not a result. A page does not open: try the next result that states the fact, up to three pages in all. Put the URL of the page that confirmed it in `did_you_know.url`.
 - Light, almanac-like tone, no exaggeration.
 
 ## When it does not work out
