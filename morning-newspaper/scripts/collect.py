@@ -1109,6 +1109,26 @@ def main():
         with_summary = sum(1 for n in all_news if n["summary"])
         print(f"SUMMARIES: {with_summary} of {len(all_news)} candidates have one (shown after —); the others"
               " carry only their title (Google News search feeds send no summary), so their text only restates it")
+    # Keyword review: a section that already brought many off-topic candidates in 2 of the last 4
+    # editions (assemble.py counts them from edition.json's "off_topic"). If today is the same,
+    # the model may propose keywords; assemble.py applies them only with 3 of 5 (SKILL.md, step 4).
+    recent = sorted([e for e in editions if isinstance(e.get("fit"), dict)
+                     and str(e.get("date") or "") < day.isoformat()], key=lambda e: str(e.get("date")))[-4:]
+    review = []
+    for sec in cfg["sections"]:
+        heavy = 0
+        for e in recent:
+            st = e["fit"].get(sec["id"])
+            try:
+                if st and int(st[1]) >= 2 and int(st[1]) * 4 >= int(st[0]):
+                    heavy += 1
+            except (TypeError, ValueError, IndexError):
+                pass
+        if heavy >= 2:
+            review.append(f"{sec['id']} ({heavy} of the last {len(recent)} editions)")
+    if review:
+        print("KEYWORDS REVIEW: many off-topic candidates lately in " + ", ".join(review)
+              + ". If today is the same, add keywords_proposal to edition.json (SKILL.md, step 4)")
     for sec in cfg["sections"]:
         print(f"\n[{sec['id']}] {sec['title']}")
         for n in news.get(sec["id"], []):

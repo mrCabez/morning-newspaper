@@ -580,6 +580,7 @@ def test_from_results_filters_like_a_normal_collection(collect_module, offline, 
     today = dt.datetime.now(collect_module.tz_of(config)).date()
     old = (today - dt.timedelta(days=30)).isoformat()
     config["avoid"] = ["election"]
+    config["sections"][0].pop("keywords", None)  # this test is about the filters, not fit?
     results = {"news": [
         {"section": "tech", "query": "q1", "title": "Browser patches a flaw already under attack",
          "url": "https://a.example/1", "outlet": "A", "date": today.isoformat()},
@@ -823,6 +824,7 @@ def test_republished_fact_is_flagged_with_its_earlier_date(collect_module, offli
         ("Google apresenta o Gemini 4 Hydrogen, modelo de IA mais rápido", "https://n.example/old", 96, "Big Outlet"),
         ("Tesouro Direto: taxas sobem nesta manhã", "https://n.example/t", 3, "A"))
     config["sections"] = config["sections"][:1]
+    config["sections"][0].pop("keywords", None)
     news, _ = collect_module.collect_news(config, 48, NOW, set(), [], UTC)
     flags = {n["title"][:20]: n.get("flags", []) for n in news["tech"]}
     assert flags["Google lança Gemini "] == ["earlier? 11-09"]
@@ -935,3 +937,20 @@ def test_did_you_know_tries_the_readers_language_first(collect_module, offline, 
     assert calls[0][0].startswith("https://pt.wikipedia.org/w/api.php") and calls[0][1] == 1
     assert not any("en.wikipedia.org" in u for u, _ in calls)
 
+
+
+# ---------------------------------------------------------------- v1.11.0: keyword review hint
+
+def test_keyword_review_hint_after_two_off_topic_editions(collect_module, offline, monkeypatch, tmp_path, capsys, config):
+    today = dt.datetime.now(collect_module.tz_of(config)).date()
+    day = lambda n: (today - dt.timedelta(days=n)).isoformat()
+    index = {"editions": [{"date": day(1), "number": 3, "fit": {"tech": [10, 4], "games": [8, 0]}},
+                          {"date": day(2), "number": 2, "fit": {"tech": [10, 3]}},
+                          {"date": day(3), "number": 1, "fit": {"tech": [10, 0]}}]}
+    results = {"news": [{"section": "tech", "title": "Quantum chip startup raises funding round",
+                         "url": "https://c.example/3", "outlet": "C", "date": today.isoformat()}]}
+    code, out, _ = run_from_results(collect_module, offline, monkeypatch, tmp_path, capsys, config, results,
+                                    index=index, date=today.isoformat())
+    assert code == 0
+    assert "KEYWORDS REVIEW: many off-topic candidates lately in tech (2 of the last 3 editions)" in out
+    assert "games (" not in out

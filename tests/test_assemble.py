@@ -1027,3 +1027,105 @@ def test_researched_headline_reminds_to_credit_the_collected_outlet(assembler, c
     assembler.edition["headline"]["text"] += f" According to {first['outlet']}, two governments asked for the update."
     proc = ok(assembler.run())
     assert "must be attributed to" not in proc.stdout
+
+
+# ---------------------------------------------------------------- v1.11.0: keyword self-tuning
+
+def _off_topic_day(assembler):
+    """Today: 4 tech candidates, 2 left out as off-topic (enough for one heavy edition)."""
+    assembler.collected["news"]["tech"].append(dict(assembler.collected["news"]["tech"][-1], id="a4",
+                                                    url="https://tech.example/a4", title="Car maker merges two models"))
+    assembler.edition["off_topic"] = ["a3", "a4"]
+
+
+def _index(*fits, log_dates=()):
+    eds = [{"date": f"2026-11-{12 - i:02d}", "number": 10 - i, "headline": "Old", "fit": f}
+           for i, f in enumerate(fits)]
+    return {"newspaper": "Morning Newspaper", "founded": "2026-11-01", "editions": eds}
+
+
+PROPOSAL = {"tech": {"add": ["compiler", "linux kernel"], "remove": []}}
+
+
+def test_keywords_applied_with_enough_ground(assembler):
+    _off_topic_day(assembler)
+    assembler.edition["keywords_proposal"] = PROPOSAL
+    proc = ok(assembler.run(index=_index({"tech": [10, 4]}, {"tech": [10, 3]})))
+    assert "KEYWORDS: tech: applied (+compiler, +linux kernel; ground: 3 of 3 editions)" in proc.stdout
+    assert "  config.json -> " in proc.stdout
+    cfg = json.loads((proc.archive / "config.json").read_text(encoding="utf-8"))
+    tech = next(s for s in cfg["sections"] if s["id"] == "tech")
+    assert tech["keywords"][-2:] == ["compiler", "linux kernel"]
+    assert cfg["keywords_log"][-1]["section"] == "tech" and cfg["keywords_log"][-1]["settled"] is False
+    assert "Editor&#x27;s note: the Technology, AI &amp; Security section was adjusted" in assembler.page() \
+        or "Editor's note: the Technology, AI &amp; Security section was adjusted" in assembler.page()
+    assert assembler.new_index()["editions"][0]["fit"]["tech"] == [4, 2]
+
+
+def test_keywords_ignored_without_ground(assembler):
+    _off_topic_day(assembler)
+    assembler.edition["keywords_proposal"] = PROPOSAL
+    proc = ok(assembler.run(index=_index({"tech": [10, 0]}, {"tech": [10, 4]})))
+    assert "KEYWORDS: tech: proposal ignored: not enough ground" in proc.stdout
+    assert "config.json" not in proc.stdout.split("PUBLISH", 1)[1].split("COVERAGE", 1)[0]
+    assert "section was adjusted" not in assembler.page()
+
+
+@pytest.mark.parametrize("change, reason", [
+    ({"local": {"add": ["traffic"]}}, "local news keeps no keywords"),
+    ({"tech": {"add": ["https://evil.example"]}}, "no links"),
+    ({"tech": {"add": ["a", "b", "c", "d", "e"]}}, "add 1-4 short words"),
+    ({"tech": {"add": ["compiler"], "remove": ["software security"]}}, "remove only words"),
+    ({"tech": {"add": ["compiler"], "remove": ["vulnerability", "hackers"]}}, "remove at most as many"),
+    ({"sports": {"add": ["football"]}}, "no such section"),
+])
+def test_bad_keyword_proposals_are_ignored(assembler, change, reason):
+    _off_topic_day(assembler)
+    assembler.edition["keywords_proposal"] = change
+    proc = ok(assembler.run(index=_index({"tech": [10, 4]}, {"tech": [10, 3]})))
+    assert "proposal ignored" in proc.stdout and reason in proc.stdout
+
+
+def test_one_keyword_change_a_week(assembler):
+    _off_topic_day(assembler)
+    assembler.config["keywords_log"] = [{"date": "2026-11-09", "section": "tech", "before": [], "after": [],
+                                         "settled": True}]
+    assembler.edition["keywords_proposal"] = PROPOSAL
+    proc = ok(assembler.run(index=_index({"tech": [10, 4]}, {"tech": [10, 3]})))
+    assert "already changed on 2026-11-09" in proc.stdout
+
+
+def test_a_change_that_made_it_worse_is_undone(assembler):
+    tech = next(s for s in assembler.config["sections"] if s["id"] == "tech")
+    before = list(tech.get("keywords") or [])
+    tech["keywords"] = before + ["cars"]
+    assembler.config["keywords_log"] = [{"date": "2026-11-09", "section": "tech", "before": before,
+                                         "after": tech["keywords"], "before_rate": 0.1, "settled": False}]
+    _off_topic_day(assembler)
+    proc = ok(assembler.run(index=_index({"tech": [10, 6]}, {"tech": [10, 5]})))
+    assert "KEYWORDS: tech: the change of 2026-11-09 made it worse" in proc.stdout
+    cfg = json.loads((proc.archive / "config.json").read_text(encoding="utf-8"))
+    assert next(s for s in cfg["sections"] if s["id"] == "tech")["keywords"] == before
+    assert all(e["settled"] for e in cfg["keywords_log"])
+    assert "was undone" in assembler.page()
+
+
+def test_a_change_that_helped_is_kept_and_settled(assembler):
+    tech = next(s for s in assembler.config["sections"] if s["id"] == "tech")
+    tech["keywords"] = list(tech.get("keywords") or []) + ["compiler"]
+    assembler.config["keywords_log"] = [{"date": "2026-11-09", "section": "tech", "before": [],
+                                         "after": tech["keywords"], "before_rate": 0.5, "settled": False}]
+    proc = ok(assembler.run(index=_index({"tech": [10, 1]}, {"tech": [10, 0]})))
+    cfg = json.loads((proc.archive / "config.json").read_text(encoding="utf-8"))
+    assert cfg["keywords_log"][0]["settled"] is True
+    assert next(s for s in cfg["sections"] if s["id"] == "tech")["keywords"][-1] == "compiler"
+    assert "undone" not in proc.stdout and "Editor" not in assembler.page()
+
+
+def test_copies_outside_the_newsstand_never_tune_keywords(assembler):
+    _off_topic_day(assembler)
+    assembler.edition["keywords_proposal"] = PROPOSAL
+    proc = ok(assembler.run("--standalone", index=_index({"tech": [10, 4]}, {"tech": [10, 3]})))
+    assert "KEYWORDS:" not in proc.stdout
+    cfg = json.loads((assembler.tmp / "config.json").read_text(encoding="utf-8"))
+    assert "keywords_log" not in cfg

@@ -28,6 +28,7 @@
       "interest": "Programming, new AI models and developer tools, serious security flaws, data breaches and online scams.",
       "count": { "weekday": [2, 3], "weekend": [1, 2] },
       "queries": ["software security vulnerability", "data breach hackers", "new AI model", "developer tools release"],
+      "keywords": ["software", "vulnerability", "security flaw", "data breach", "hackers", "AI model", "programming", "developer", "open source", "scam"],
       "feeds": []
     },
     {
@@ -46,6 +47,7 @@
       "interest": "Interest rates, inflation and what they mean for everyday savers. Facts only, never investment advice.",
       "count": { "weekday": [1, 2], "weekend": [0, 1] },
       "queries": ["Federal Reserve interest rates", "inflation CPI"],
+      "keywords": ["interest rate", "Federal Reserve", "inflation", "savings", "Treasury", "CD rates", "bonds"],
       "feeds": []
     },
     {

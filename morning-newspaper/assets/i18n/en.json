@@ -103,5 +103,7 @@
  "newsstand_missing_section": "Notice to the reader",
  "newsstand_missing_title": "Newsstand not found",
  "newsstand_missing_steps": ["Open your artifacts in Claude and look for the newspaper's newsstand.", "If it is there, it was a passing failure: nothing to do, the next edition goes back to the newsstand.", "If it was deleted, ask Claude to create a new newsstand for your newspaper; it sets up your sections again and gives you the new address (slug).", "Replace the old slug with the new one in the scheduled task's prompt."],
- "newsstand_missing_steps_title": "What to do"
+ "newsstand_missing_steps_title": "What to do",
+ "keywords_note": "Editor's note: the {section} section was adjusted to bring more stories about {words}.",
+ "keywords_undo_note": "Editor's note: the last adjustment to the {section} section was undone, as it did not improve the selection."
 }

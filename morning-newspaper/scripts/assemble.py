@@ -357,6 +357,159 @@ def wrong_weekdays(text, day, L):
     return out
 
 
+# ---------------------------------------------------------------- keyword self-tuning
+# The model may adjust a section's "keywords" on its own, the one config change it makes without
+# the reader, because keywords only reorder candidates (never hide one) and can be undone. The
+# script, not the model, decides whether there is enough ground: the model only lists the
+# candidates it left out as off-topic ("off_topic") and proposes words ("keywords_proposal").
+KW_WINDOW = 5          # editions looked at, today included
+KW_NEEDED = 3          # of them with many off-topic candidates
+KW_COOLDOWN_DAYS = 7   # one change per section per week
+KW_MAX = 15            # words per section
+KW_MAX_ADD = 4         # words added per change
+KW_SETTLE = 3          # editions after a change before judging it
+KW_WORSE = 0.10        # off-topic share that much higher after the change → undo it
+
+
+def kw_heavy(stat):
+    """An edition where a section brought many off-topic candidates: at least 2 and a quarter."""
+    try:
+        cand, off = int(stat[0]), int(stat[1])
+    except (TypeError, ValueError, IndexError):
+        return False
+    return off >= 2 and off * 4 >= cand
+
+
+def kw_rate(stats):
+    vals = [int(st[1]) / int(st[0]) for st in stats if st and int(st[0] or 0) > 0]
+    return sum(vals) / len(vals) if vals else 0.0
+
+
+def kw_valid_word(w):
+    if not isinstance(w, str):
+        return False
+    w = w.strip()
+    return (2 <= len(w) <= 40 and len(w.split()) <= 3 and not w.isdigit()
+            and re.fullmatch(r"[\w][\w \-'.+&]*", w) is not None
+            and not re.search(r"https?|www\.|\.(com|net|org)\b", w.lower()))
+
+
+def kw_is_local(sec, cfg):
+    city = _fold((cfg.get("city") or {}).get("name", ""))
+    return bool(city) and any(city in _fold(str(q)) for q in sec.get("queries") or [])
+
+
+def keyword_tuning(cfg, ed, collected, previous, day, L):
+    """Decides today's keyword change (or undo) from the evidence. Returns (fit, changes, notes, lines, dirty):
+    fit = this edition's {section: [candidates, off_topic]} for the index; changes = list of
+    (section_id, new_keywords, log_entry); notes = lines printed on the page; lines = KEYWORDS: output;
+    dirty = an earlier change was judged (its log entry changed), so config.json must be saved."""
+    lines, notes, changes, dirty = [], [], [], False
+    news = collected.get("news") or {}
+    where = {n["id"]: sid for sid, lst in news.items() for n in lst if isinstance(n, dict) and "id" in n}
+    off = ed.get("off_topic") or []
+    if not isinstance(off, list):
+        off = []
+        lines.append("ignored off_topic: it must be a list of candidate refs, e.g. [\"a3\", \"a8\"]")
+    unknown = [r for r in off if r not in where]
+    if unknown:
+        lines.append(f"ignored off_topic refs not in collected.json: {', '.join(map(str, unknown[:5]))}")
+    fit = {}
+    for sid, lst in news.items():
+        fit[sid] = [len(lst), len({r for r in off if where.get(r) == sid})]
+    secs = {s["id"]: s for s in cfg.get("sections") or []}
+    log = cfg.get("keywords_log") if isinstance(cfg.get("keywords_log"), list) else []
+    hist = sorted([e for e in previous if isinstance(e.get("fit"), dict)], key=lambda e: str(e.get("date")))
+    title = lambda sid: secs.get(sid, {}).get("title", sid)
+
+    # 1. Judge earlier changes once KW_SETTLE editions came after them; undo the ones that made it worse.
+    for entry in log:
+        if entry.get("settled") or entry.get("section") not in secs:
+            continue
+        after = [e["fit"].get(entry["section"]) for e in hist if str(e.get("date")) > str(entry.get("date"))]
+        after.append(fit.get(entry["section"]))
+        after = [st for st in after if st]
+        if len(after) < KW_SETTLE:
+            continue
+        entry["settled"] = True
+        dirty = True
+        now_rate = kw_rate(after[-KW_SETTLE:])
+        sec = secs[entry["section"]]
+        if now_rate > float(entry.get("before_rate") or 0) + KW_WORSE and sec.get("keywords") == entry.get("after"):
+            changes.append((entry["section"], list(entry.get("before") or []),
+                            {"date": day.isoformat(), "section": entry["section"], "undo_of": entry.get("date"),
+                             "before": entry.get("after"), "after": list(entry.get("before") or []), "settled": True}))
+            notes.append(L["keywords_undo_note"].format(section=title(entry["section"])))
+            lines.append(f"{entry['section']}: the change of {entry.get('date')} made it worse "
+                         f"({now_rate:.0%} off-topic after, {float(entry.get('before_rate') or 0):.0%} before): undone")
+    undone = {c[0] for c in changes}
+
+    # 2. Today's proposal, applied only with the evidence.
+    prop = ed.get("keywords_proposal")
+    if prop and not isinstance(prop, dict):
+        lines.append("ignored keywords_proposal: it must look like {\"tech\": {\"add\": [...], \"remove\": [...]}}")
+        prop = {}
+    for sid, p in (prop or {}).items():
+        why = None
+        sec = secs.get(sid)
+        recent = [e["fit"].get(sid) for e in hist[-(KW_WINDOW - 1):]] + [fit.get(sid)]
+        heavy = sum(1 for st in recent if kw_heavy(st))
+        last = max([str(x.get("date")) for x in log if x.get("section") == sid] + [""])
+        current = [k for k in (sec or {}).get("keywords") or [] if isinstance(k, str)]
+        add = p.get("add") if isinstance(p, dict) else None
+        remove = p.get("remove") if isinstance(p, dict) else None
+        add = [w.strip() for w in add or [] if isinstance(w, str)]
+        remove = [w for w in remove or [] if isinstance(w, str)]
+        have = {_fold(k) for k in current}
+        new_words = []
+        for w in add:
+            if _fold(w) not in have and _fold(w) not in {_fold(x) for x in new_words}:
+                new_words.append(w)
+        if not sec:
+            why = "no such section"
+        elif kw_is_local(sec, cfg):
+            why = "local news keeps no keywords"
+        elif sid in undone:
+            why = "its last change was just undone"
+        elif last and (day - dt.date.fromisoformat(last[:10])).days < KW_COOLDOWN_DAYS:
+            why = f"already changed on {last[:10]} (one change a week)"
+        elif heavy < KW_NEEDED:
+            why = (f"not enough ground: many off-topic candidates in {heavy} of the last {len(recent)} "
+                   f"editions, {KW_NEEDED} needed")
+        elif not new_words or not all(kw_valid_word(w) for w in add):
+            why = "add 1-4 short words or phrases (letters, at most 3 words each, no links)"
+        elif len(new_words) > KW_MAX_ADD:
+            why = f"at most {KW_MAX_ADD} words per change"
+        elif any(_fold(w) not in have for w in remove):
+            why = "remove only words the section already has"
+        elif len(remove) > len(new_words):
+            why = "remove at most as many words as you add (keywords never shrink to a filter)"
+        if why:
+            lines.append(f"{sid}: proposal ignored: {why}")
+            continue
+        drop = {_fold(w) for w in remove}
+        after = [k for k in current if _fold(k) not in drop] + new_words
+        if len(after) > KW_MAX:
+            lines.append(f"{sid}: proposal ignored: more than {KW_MAX} words; remove some")
+            continue
+        changes.append((sid, after, {"date": day.isoformat(), "section": sid, "before": current, "after": after,
+                                     "before_rate": round(kw_rate([st for st in recent if st]), 3),
+                                     "settled": False}))
+        notes.append(L["keywords_note"].format(section=title(sid), words=", ".join(new_words)))
+        lines.append(f"{sid}: applied (+{', +'.join(new_words)}"
+                     + (f", -{', -'.join(remove)}" if remove else "") + f"; ground: {heavy} of {len(recent)} editions)")
+    return fit, changes, notes, lines, dirty
+
+
+def apply_keyword_changes(cfg, changes):
+    secs = {s["id"]: s for s in cfg.get("sections") or []}
+    log = cfg.get("keywords_log") if isinstance(cfg.get("keywords_log"), list) else []
+    for sid, after, entry in changes:
+        secs[sid]["keywords"] = after
+        log.append(entry)
+    cfg["keywords_log"] = log[-20:]
+
+
 def word_count(t):
     return len(re.findall(r"\w+", t or ""))
 
@@ -856,6 +1009,11 @@ def build():
             missing_text += " " + L["newsstand_missing_no_config"]
             no_news = False
 
+    # Keyword self-tuning: only for an edition that goes to the newsstand (or the single page).
+    kw_fit, kw_changes, kw_notes, kw_lines, kw_dirty = {}, [], [], [], False
+    if not sample and not (standalone and not single):
+        kw_fit, kw_changes, kw_notes, kw_lines, kw_dirty = keyword_tuning(cfg, ed, collected, previous, day, L)
+
     def fmt_date(fmt):
         return fmt.format(weekday=L["weekdays"][day.weekday()], day=day.day,
                           month=L["months_short"][day.month - 1], year=day.year)
@@ -908,6 +1066,7 @@ def build():
         "url_didyouknow": str(dyk.get("url", "")).startswith("https://"), "URL_DIDYOUKNOW": dyk.get("url", ""),
         "FOOTER_CREDITS": footer,
         "shared_note": bool(shared_note), "SHARED_NOTE": shared_note, "newsstand_button": not standalone,
+        "editor_note": bool(kw_notes), "EDITOR_NOTE": " ".join(kw_notes),
     }
     for k, v in L.items():
         if isinstance(v, str):
@@ -984,6 +1143,13 @@ def build():
                   "If yes, run again with --replace; if not, keep it and say so in one line.")
             return 3
 
+    if kw_changes or kw_dirty:
+        apply_keyword_changes(cfg, kw_changes)
+        with open(a.config, "w", encoding="utf-8") as f:
+            json.dump(cfg, f, ensure_ascii=False, indent=2)
+    for line in kw_lines:
+        print("KEYWORDS:", line)
+
     if standalone and not single:
         # Nothing goes to the newsstand: no index is written, so a copy can never replace the
         # morning entry by mistake if someone publishes WORK/archive later.
@@ -1015,6 +1181,9 @@ def build():
         # every edition. collect.py compares fingerprints the same way.
         "link_ids": sorted({link_id(n.get("url", "")) for n in stories if n.get("url")}),
     }
+    if kw_fit:
+        # Per section [candidates, off-topic ones]: the ground for adjusting keywords (KW_WINDOW editions).
+        entry["fit"] = kw_fit
     archive_labels = {k: L[k] for k in ("html_lang", "archive_title", "archive_kicker", "archive_subtitle",
                                         "latest_edition", "previous_editions", "archive_empty", "archive_error",
                                         "weekend_tag", "sample_tag", "issue_label", "months_short", "date_short_format")}
@@ -1025,7 +1194,7 @@ def build():
         if "links" in e:  # entries written before v1.9.0
             e["link_ids"] = sorted({link_id(u) for u in e.pop("links") if u} | set(e.get("link_ids") or []))
     for e in new["editions"][DEDUP_EDITIONS:]:
-        for k in ("titles", "source_titles", "links", "link_ids"):
+        for k in ("titles", "source_titles", "links", "link_ids", "fit"):
             e.pop(k, None)
 
     if single:
@@ -1072,7 +1241,7 @@ def build():
     elif legacy:
         print("LEGACY NEWSSTAND MIGRATED: the index now lives in editions/index.json. Publish every file below "
               "and, if the tool can delete files, remove edicoes/indice.json in the same call.")
-    if (index is None or legacy or a.with_config) and not sample:
+    if (index is None or legacy or a.with_config or kw_changes or kw_dirty) and not sample:
         shutil.copy(a.config, os.path.join(dest, "config.json"))
         publish.append("config.json")
     print(f"OK: {L['issue_label']} {number:03d} · {day.isoformat()} · {total} stories"

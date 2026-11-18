@@ -103,5 +103,7 @@
  "newsstand_missing_section": "Aviso ao leitor",
  "newsstand_missing_title": "Banca não encontrada",
  "newsstand_missing_steps": ["Abra seus artefatos no Claude e procure a banca do jornal.", "Se ela estiver lá, foi uma falha passageira: não é preciso fazer nada, a próxima edição volta para a banca.", "Se ela foi apagada, peça ao Claude para criar uma nova banca do seu jornal; ele refaz as suas seções e informa o novo endereço (slug).", "Troque o slug antigo pelo novo no prompt da tarefa agendada."],
- "newsstand_missing_steps_title": "O que fazer"
+ "newsstand_missing_steps_title": "O que fazer",
+ "keywords_note": "Nota da redação: a seção {section} foi ajustada para trazer mais notícias sobre {words}.",
+ "keywords_undo_note": "Nota da redação: o último ajuste da seção {section} foi desfeito, porque não melhorou a seleção."
 }
