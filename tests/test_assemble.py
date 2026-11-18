@@ -969,3 +969,61 @@ def test_newsstand_missing_without_config_is_a_minimal_page(assembler):
     assert html.escape("Without the newsstand's settings there are no news sections today") in page
     assert "No confirmed news today" not in page and "could be confirmed" not in page
     assert page.count("<li>") >= 4
+
+
+# ---------------------------------------------------------------- v1.11.0
+
+def test_wrong_weekday_next_to_a_date_is_refused(assembler):
+    # 2026-11-12 was a Thursday; the edition is dated 2026-11-13.
+    assembler.edition["headline"]["text"] = "A browser maker released a fix on Wednesday, Nov. 12. It was exploited."
+    proc = refused(assembler.run())
+    assert '"wednesday, nov. 12" does not match the calendar: 2026-11-12 is a Thursday' in proc.stdout
+
+
+@pytest.mark.parametrize("text", [
+    "A browser maker released a fix on Thursday, Nov. 12. It was exploited.",
+    "A browser maker released a fix on Thursday. It was exploited 12 times.",
+    "A browser maker released a fix on Monday, 9:30. It was exploited.",
+])
+def test_right_or_undated_weekdays_pass(assembler, text):
+    assembler.edition["headline"]["text"] = text
+    ok(assembler.run())
+
+
+def test_weekday_check_in_portuguese(assembler):
+    assembler.config["language"] = "pt-BR"
+    assembler.edition["headline"]["text"] = "A Oracle liberou na quarta-feira, 12, correções. Pela segunda vez, 12 países pediram."
+    proc = refused(assembler.run())
+    assert "quarta-feira, 12" in proc.stdout and "Quinta-feira" in proc.stdout
+    assembler.edition["headline"]["text"] = "A Oracle liberou na quinta-feira, 12, correções. Pela segunda vez, 12 países pediram."
+    ok(assembler.run())
+
+
+def test_dropping_an_attribution_between_runs_warns(assembler):
+    story = assembler.edition["sections"]["tech"][0]
+    story["text"] = "Outlets report that it beats larger models on the test."
+    first = ok(assembler.run())
+    assert "attributed this story" not in first.stdout
+    story["text"] = "It beats larger models on the test."
+    second = ok(assembler.run())
+    assert f"WARNING: {story['ref']}: an earlier run attributed this story" in second.stdout
+
+
+def test_attribution_words_are_not_checks(collect_module):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("assemble_mod", SCRIPTS / "assemble.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    src = "Falha crítica no Apache mod_http2 CVE-2026-119618, Singapura alerta ataques"
+    notes = mod.unsupported("Veículos relatam que Singapura alerta para ataques à falha crítica no Apache.", src, True)
+    assert not any("veiculos" in n or "relatam" in n for n in notes)
+
+
+def test_researched_headline_reminds_to_credit_the_collected_outlet(assembler, collected):
+    first = next(n for lst in collected["news"].values() for n in lst if n["id"] == "a1")
+    assembler.edition["headline"].update(url="https://blog.example/original", outlet="Original Blog")
+    proc = ok(assembler.run())
+    assert f"must be attributed to {first['outlet']}" in proc.stdout
+    assembler.edition["headline"]["text"] += f" According to {first['outlet']}, two governments asked for the update."
+    proc = ok(assembler.run())
+    assert "must be attributed to" not in proc.stdout

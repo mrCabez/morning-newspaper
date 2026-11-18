@@ -18,7 +18,7 @@ Use the session's artifact tools: list artifacts, get an artifact's state (versi
 **`index.html` is always the newsstand's main page.** When the publishing tool asks for the page, entry file or `file_path`, give it `index.html` from `WORK/archive/`, never today's edition: an edition there would replace the newsstand's cover. Editions and the index are supporting files. Publish from `WORK/archive/`, which sits in the working folder (SKILL.md, "Edition flow"): the tool refuses files from other folders.
 
 ## Finding the newsstand
-Send the calls of this step together with step 0 and, as soon as the newsstand is known, list its files and read its page in one round (both are needed before publishing anyway).
+Send the calls of this step together with step 0 and, as soon as the newsstand is known, do everything else in **one** round: list its files, read its page, read `config.json` and `editions/index.json` (their paths are fixed, so they need not wait for the list) and load the schemas of the calendar and email tools step 2 will call. All of these are needed before publishing anyway; split into two rounds, they cost the whole conversation twice.
 1. If the request or the scheduled task prompt has the newsstand slug, use it.
 2. Otherwise search the reader's artifacts by title, in this order: the newspaper name; the newsstand label in the reader's language and in English ("Banca", "Quiosco", "Newsstand"; older newsstands were created with the title "Newsstand" alone). Open the files of each match and take the one whose files include `editions/index.json`. Only if no title matches, list the artifacts and check the most recent ones with the "newspaper" icon.
 3. More than one: use the most recent and, in an interactive session, say so in one line.

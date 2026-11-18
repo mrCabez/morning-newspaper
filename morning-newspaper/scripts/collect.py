@@ -321,10 +321,23 @@ def stems(txt):
     return {w[:5] for w in n.split() if (len(w) > 3 and w not in COMMON) or w.isdigit()}
 
 
+# Coined names that point to one fact: letters, a digit, letters again ("Java4Shell", "Log4j") or
+# a CVE id. Two titles that share one tell the same story even with no other word in common.
+COINED = r"\b(?:[A-Za-z]+\d+[A-Za-z][A-Za-z0-9]*|CVE-\d{4}-\d{4,})\b"
+
+
+def coined_names(txt):
+    return {m.lower() for m in re.findall(COINED, txt or "") if len(m) >= 5}
+
+
 def related(a, b):
     """Looser than same_story: two titles that may tell the same fact in different words.
-    Only a hint for the model (printed as ≈a1); nothing is dropped because of it."""
-    pa, pb = stems(a), stems(b)
+    Only a hint for the model (printed as ≈a1); nothing is dropped because of it. A shared coined
+    name is enough; bare numbers ("4.5", "2") never count as shared words."""
+    if coined_names(a) & coined_names(b):
+        return True
+    pa = {w for w in stems(a) if not w.isdigit()}
+    pb = {w for w in stems(b) if not w.isdigit()}
     if not pa or not pb:
         return False
     shared = pa & pb

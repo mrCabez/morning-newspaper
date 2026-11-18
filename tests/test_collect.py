@@ -363,6 +363,11 @@ def test_partial_failure_is_not_a_blocked_network(tmp_path, config):
      "Presidente do BC, Galípolo resiste à pressão por cortes de juros", True),
     ("Google lança Gemini 4 Hydrogen, IA gratuita", "Google lança Pixel 11 com nova câmera", False),
     ("Copom mantém Selic em 15%", "Caixa estuda subir juros da casa própria", False),
+    # v1.11.0: a shared coined name or CVE id is the same fact; a shared version number is not
+    ("Java4Shell: falha crítica no Java, encontrada com IA, leva EUA e Coreia do Sul a pedir atualização urgente",
+     "Java4Shell, Oracle lança patches para Java 17, 21, 25 e 27", True),
+    ("Falha no Apache mod_http2 CVE-2026-119618", "Singapura alerta para ataques a CVE-2026-119618", True),
+    ("EVE Vanguard Launches With DLSS 4.5", "Avatar Legends: Fighting Game lança Patch 4.5 no Switch 2", False),
 ])
 def test_related_marks_the_same_fact_in_other_words(collect_module, a, b, hint):
     assert collect_module.related(a, b) is hint

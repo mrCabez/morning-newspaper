@@ -253,7 +253,11 @@ STOP_CAPS = {"o", "a", "os", "as", "um", "uma", "the", "el", "la", "los", "las",
 # Words that only attribute a fact to its outlet ("Segundo o BPMoney, …"): the rules ask for this
 # when only a small outlet backs a story, so they never count as facts the source lacks.
 ATTRIBUTION = {"segundo", "conforme", "according", "segun", "informa", "informou", "reporta", "relata",
-               "relatou", "afirma", "afirmou", "reports", "reported", "informo"}
+               "relatou", "afirma", "afirmou", "reports", "reported", "informo",
+               # "outlets report…": the hedge the rules ask for when only small outlets carry a story
+               "relatam", "reportam", "informam", "noticiam", "noticiou", "veiculos", "sites",
+               "imprensa", "relatos", "outlets", "media", "report", "reporting", "medios", "reportan",
+               "informan", "informaron", "publicam", "publicou", "dizem", "afirmam"}
 # Other names of a country the source names by its short form ("EUA" in the title, "Estados Unidos"
 # in the text). Short forms are matched in capitals only ("us" and "eu" are also everyday words).
 COUNTRY_NAMES = [(r"\b(?:EUA|EEUU|EE\. ?UU|USA)\b|\bU\.S\.|\bUS\b(?!\$)", r"estados unidos|united states",
@@ -309,6 +313,48 @@ def unsupported(written, source, empty_summary):
         if extra:
             notes.append("only the title backs it; words not in the title: " + ", ".join(list(dict.fromkeys(extra))[:8]))
     return notes
+
+
+def wrong_weekdays(text, day, L):
+    """Weekday + day number pairs ("terça-feira, 17", "Tuesday, Nov. 17") that the calendar does not
+    back. The model works weekdays out in its head and gets them wrong; the script knows the calendar.
+    Only full weekday names count ("segunda" alone is also an ordinal). The month is the one named,
+    else the nearest date to the edition with that day number (within 10 days); anything else is
+    left alone."""
+    names = [_fold(w) for w in L.get("weekdays") or []]
+    if len(names) != 7 or not text:
+        return []
+    months = [_fold(m) for m in (L.get("months") or [])] + [_fold(m) for m in (L.get("months_short") or [])]
+    month_re = "|".join(re.escape(m) for m in sorted(set(filter(None, months)), key=len, reverse=True))
+    folded = _fold(text)
+    out = []
+    for wd, name in enumerate(names):
+        pat = (re.escape(name) + r"[\s,(]*(?:dia\s+)?(?:(" + (month_re or "(?!)") + r")\.?\s+)?"
+               r"(\d{1,2})(?![\d:%h])(?:\s*(?:de\s+)?(" + (month_re or "(?!)") + r"))?")
+        for m in re.finditer(r"\b" + pat, folded):
+            n = int(m.group(2))
+            if not 1 <= n <= 31:
+                continue
+            month_word = m.group(1) or m.group(3)
+            candidates = []
+            if month_word and month_word in months:
+                mon = months.index(month_word) % 12 + 1
+                for y in (day.year - 1, day.year, day.year + 1):
+                    try:
+                        candidates.append(dt.date(y, mon, n))
+                    except ValueError:
+                        pass
+                candidates = [min(candidates, key=lambda d: abs((d - day).days))] if candidates else []
+            else:
+                for delta in range(-10, 11):
+                    d = day + dt.timedelta(days=delta)
+                    if d.day == n:
+                        candidates.append(d)
+                candidates = candidates[:1]
+            if candidates and candidates[0].weekday() != wd:
+                d = candidates[0]
+                out.append((m.group(0), d.isoformat(), L["weekdays"][d.weekday()]))
+    return out
 
 
 def word_count(t):
@@ -633,6 +679,44 @@ def build():
         for n in sections[sid]:
             if word_count(n.get("title")) > 12:
                 warnings.append(f"{sid}: title over 12 words: {n.get('title', '')[:40]}")
+    # A weekday next to a day number is checked against the calendar ("segunda-feira, 17" when the
+    # 17th was a Tuesday): the one kind of date the model writes from its head.
+    dated = [("headline", h)] + [(f"{sid}[{i}]", n) for sid, lst in sections.items() for i, n in enumerate(lst)]
+    dated += [(f"classifieds[{i}]", c) for i, c in enumerate(ed.get("classifieds") or []) if isinstance(c, dict)]
+    for where, item in dated:
+        for field in ("title", "deck", "text"):
+            for said, real, weekday in wrong_weekdays(str((item or {}).get(field) or ""), day, L):
+                errors.append(f"{where}: \"{said}\" does not match the calendar: {real} is a {weekday}. "
+                              "Write the weekday from the date, or leave the weekday out")
+    if isinstance(ed.get("prep_note"), str):
+        for said, real, weekday in wrong_weekdays(ed["prep_note"], day, L):
+            errors.append(f"prep_note: \"{said}\" does not match the calendar: {real} is a {weekday}")
+    # An attribution ("Veículos relatam…", "Segundo o X…") is how the paper hedges a story only small
+    # outlets carry. Trimming text to clear a CHECK must never drop it: once a run had it for a ref,
+    # a later run without it gets a warning. Kept in WORK/attributions.json between runs.
+    apath = os.path.join(a.work, "attributions.json")
+    try:
+        with open(apath, encoding="utf-8") as f:
+            had = set(json.load(f))
+    except (OSError, ValueError, TypeError):
+        had = set()
+    now_has = set()
+    for where, item in dated:
+        ref = (item or {}).get("ref")
+        if not ref or where.startswith("classifieds"):
+            continue
+        words = set(re.findall(r"[a-z]+", _fold(" ".join(str(item.get(k) or "") for k in ("title", "deck", "text")))))
+        if words & ATTRIBUTION:
+            now_has.add(ref)
+        elif ref in had:
+            warnings.append(f"{ref}: an earlier run attributed this story to its outlets (\"outlets report…\") "
+                            "and this text states it as fact. Put the attribution back unless a larger "
+                            "outlet or an opened page confirms it (SKILL.md step 3)")
+    try:
+        with open(apath, "w", encoding="utf-8") as f:
+            json.dump(sorted(had | now_has), f)
+    except OSError:
+        pass
     # Each section's "count" range is for its own stories; the headline is apart and never counts.
     for sid, lst in sections.items():
         rng = ((next((s for s in cfg["sections"] if s["id"] == sid), {}).get("count") or {})
@@ -854,6 +938,16 @@ def build():
     # back. A headline with its own researched page is checked by the model against that page.
     CHECKS.clear()
     items = [("headline", h)] if h and not (h.get("url") and h.get("url") != (refs.get(h.get("ref")) or {}).get("url")) else []
+    base_h = refs.get(h.get("ref") or "") if h else None
+    if base_h and h.get("url") and h.get("url") != base_h.get("url") and base_h.get("outlet") \
+            and _fold(base_h.get("outlet")) != _fold(h.get("outlet")) \
+            and _fold(base_h["outlet"]) not in _fold(" ".join(str(h.get(k) or "") for k in ("title", "deck", "text"))):
+        # The printed credit is the opened page; a fact only the collected title or summary carries
+        # (e.g. who asked for the update) is then credited to a page that never says it.
+        CHECKS.append(f"headline ({h['ref']}): the printed source is {h.get('outlet')}. A fact that page does "
+                      f"not state but the collected title or summary from {base_h['outlet']} does must be "
+                      f"attributed to {base_h['outlet']} in the text (\"Segundo a {base_h['outlet']}, …\", in the "
+                      "reader's language), or come out. Nothing to fix if every fact is on that page")
     items += [(n.get("ref") or sid, n) for sid, lst in sections.items() for n in lst]
     items += [("history", hist), ("did_you_know", dyk)]
     for where, item in items:
@@ -1011,7 +1105,9 @@ def next_steps(single, standalone=False):
         print("CHECK:", c)
     if CHECKS:
         print("  Each CHECK names words the collected text does not carry. Keep them only if they are a "
-              "paraphrase or come from the page you opened for the headline; otherwise remove them (step 7).")
+              "paraphrase or come from the page you opened for the headline; otherwise remove them (step 7). "
+              "A CHECK is a hint, not a score: never remove an attribution (\"outlets report…\") or a hedge "
+              "to clear one.")
     print("NEXT (mandatory, in order):")
     if standalone:
         print("  6. Nothing to publish: send the file above to the reader, with one sentence on why there is "
