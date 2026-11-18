@@ -2,6 +2,29 @@
 
 All notable changes to Morning Newspaper. Each release on GitHub uses the matching section below as its notes.
 
+## v1.11.0 — 2026-11-18
+
+From the debug reports of scheduled editions No. 007 and No. 008.
+
+### New
+- **Section keywords that tune themselves.** Each section (except local news) has `keywords`: stories that carry one fill the candidate list first, the others are flagged `fit?`, so a weak list only reorders and never hides a story. Setup now writes them for every section, without asking. In each edition the model lists the candidates it left out as off-topic (`off_topic`); when a section keeps bringing them, `collect.py` prints `KEYWORDS REVIEW` and the model may propose a few words. `assemble.py` applies the proposal only with ground (many off-topic candidates in 3 of the last 5 editions), one change per section a week, adding or swapping words, never shrinking the list to a filter, with every word validated. The paper prints a one-line editor's note, and a change that makes the next 3 editions worse is undone by itself. It is the one config change made without the reader; everything else still needs their yes.
+- **Weekday check.** `assemble.py` refuses a weekday next to a day number that the calendar does not back ("segunda-feira, 17" when the 17th was a Tuesday), in any language with labels.
+- **Attributions are kept.** "Outlets report…" is never a `CHECK:`; a run that drops an attribution an earlier run had gets a warning. A headline credited to the page that was opened gets a `CHECK:` until a fact only the collected title carries is attributed to its outlet.
+- **`earlier? MM-DD` flag** for a fact the same searches returned before the window (probably a republication), and a `SUMMARIES` line saying how many candidates have a summary.
+- **"Did you know?"** tries the reader's Wikipedia first, then seed articles per theme, then the English search; list articles are skipped, `Retry-After` is honored and the HTTP code is reported in `FAILURES`.
+
+### Fixed
+- Same-fact grouping (`≈`): a shared coined name (Java4Shell, Log4j) or CVE id now groups two titles; bare numbers ("4.5") no longer do.
+- The headline is chosen before any search and only that story is researched; if its fact is older than the window, the next story takes its place without a new search. If the best result's page does not open, the next one is tried once.
+- Rate moves named without "rate of" ("juros", "rate cut") are flagged `recurring?`.
+- No `CHECK:` for the story's own outlet, country short and full names, or another tense of a title word; `weather_condition` is ignored when the condition is already in the reader's language.
+- An `ERROR:` that survives two fixes drops the story it names, so the edition still comes out. A scheduled run never ends before the summary: a call that did not run is sent again.
+
+### Changed
+- Fewer rounds: the newsstand's files, page, config, index and the calendar and email tool schemas are read in one round.
+- `edition.json` is fixed with the file-editing tool, never with a script.
+- The User-Agent names the project page.
+
 ## v1.10.0 — 2026-11-17
 
 ### New

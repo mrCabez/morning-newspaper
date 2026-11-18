@@ -45,7 +45,7 @@ try:
 except Exception:  # pragma: no cover
     ZoneInfo = None
 
-UA = "morning-newspaper/1.10.0 (+github.com/oantuneshenriqueo/morning-newspaper; personal newspaper; RSS reader)"
+UA = "morning-newspaper/1.11.0 (+github.com/oantuneshenriqueo/morning-newspaper; personal newspaper; RSS reader)"
 TIMEOUT = 12
 MAX_BYTES = 5_000_000
 # Stories are only compared against the latest editions: a headline from months ago must not
@@ -1115,7 +1115,10 @@ def main():
     recent = sorted([e for e in editions if isinstance(e.get("fit"), dict)
                      and str(e.get("date") or "") < day.isoformat()], key=lambda e: str(e.get("date")))[-4:]
     review = []
+    city_f = " ".join(words((cfg.get("city") or {}).get("name", "")))
     for sec in cfg["sections"]:
+        if city_f and any(city_f in " ".join(words(str(q))) for q in sec.get("queries") or []):
+            continue  # local news keeps no keywords
         heavy = 0
         for e in recent:
             st = e["fit"].get(sec["id"])
