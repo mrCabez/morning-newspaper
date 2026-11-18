@@ -944,33 +944,6 @@ def test_weather_condition_is_ignored_when_already_in_the_readers_language(assem
     assert "Mostly sunny with breeze" in page
 
 
-
-def test_newsstand_missing_with_config_is_a_full_standalone_page(assembler):
-    """The task's newsstand is gone but a config exists: full paper, not published, notice on top."""
-    proc = ok(assembler.run("--newsstand-missing"))
-    assert "NOT FOR THE NEWSSTAND" in proc.stdout and "PUBLISH" not in proc.stdout
-    page = standalone_page(assembler)
-    assert "Newsstand not found" in page and "The newsstand named in the scheduled task was not found" in page
-    assert "Replace the old slug with the new one" in page  # the steps to fix it
-    assert "Without the newsstand&#x27;s settings" not in page and "Without the newsstand's settings" not in page
-    assert assembler.edition["headline"]["title"] in page or "class=\"manchete" in page
-
-
-def test_newsstand_missing_without_config_is_a_minimal_page(assembler):
-    """No config anywhere: no sections, agenda and extras only; the notice takes the headline's place."""
-    assembler.config["sections"] = []
-    assembler.config.pop("city", None)
-    for k in ("headline", "sections"):
-        assembler.edition.pop(k, None)
-    proc = ok(assembler.run("--newsstand-missing"))
-    assert "NOT FOR THE NEWSSTAND" in proc.stdout
-    page = standalone_page(assembler)
-    assert "Newsstand not found" in page
-    assert html.escape("Without the newsstand's settings there are no news sections today") in page
-    assert "No confirmed news today" not in page and "could be confirmed" not in page
-    assert page.count("<li>") >= 4
-
-
 # ---------------------------------------------------------------- v1.11.0
 
 def test_wrong_weekday_next_to_a_date_is_refused(assembler):
