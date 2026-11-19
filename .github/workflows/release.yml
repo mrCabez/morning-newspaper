@@ -91,3 +91,39 @@ jobs:
               --title "Morning Newspaper $TAG" \
               $NOTES
           fi
+
+      - name: Point the plugin marketplace to the new release
+        # Only now that the tag exists: an app that syncs the marketplace on every push would fail
+        # if marketplace.json named a tag that is not there yet. Never moves the plugin backwards.
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          for attempt in 1 2 3; do
+            git fetch --depth=1 origin main
+            git checkout -q -B main FETCH_HEAD
+            python3 - "$TAG" <<'PY'
+          import json, sys
+          tag = sys.argv[1]
+          new = tag.lstrip("v")
+          path = ".claude-plugin/marketplace.json"
+          with open(path, encoding="utf-8") as f:
+              market = json.load(f)
+          entry = market["plugins"][0]
+          key = lambda v: tuple(int(x) for x in v.split("."))
+          if key(new) <= key(entry["version"]):
+              print(f"Plugin already at {entry['version']}; nothing to change")
+              sys.exit(0)
+          entry["version"] = new
+          entry["source"]["ref"] = tag
+          with open(path, "w", encoding="utf-8") as f:
+              f.write(json.dumps(market, indent=2, ensure_ascii=False) + "\n")
+          print(f"Plugin now points to {tag}")
+          PY
+            if git diff --quiet; then exit 0; fi
+            git -c user.name=oantuneshenriqueo -c user.email=oantuneshenriqueo@users.noreply.github.com \
+              commit -q -am "Plugin marketplace: point to $TAG"
+            if git push origin main; then exit 0; fi
+            echo "main moved; trying again"; sleep 5
+          done
+          echo "::error::Could not update .claude-plugin/marketplace.json; point it to $TAG by hand"
+          exit 1

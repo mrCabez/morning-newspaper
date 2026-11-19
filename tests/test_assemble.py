@@ -1140,3 +1140,21 @@ def test_connector_keys_present_or_failed_do_not_warn(assembler):
     assembler.edition["agenda_error"] = True
     proc = ok(assembler.run())
     assert "key: the" not in proc.stdout
+
+
+@pytest.mark.parametrize("sentence", [
+    "Após Durov negar a falha, o Telegram respondeu.",
+    "Segundo Durov, não há falha nos widgets.",
+    "Também Apple lança iPhone.",
+    "Hoje Apple lança iPhone.",
+    "Recentemente Durov negou a falha.",
+    "After Apple launched the iPhone, Google responded.",
+    "Meanwhile Google responded.",
+    "Tras Apple lança iPhone.",
+    "Nesta segunda, Durov negou a falha.",
+])
+def test_common_word_opening_a_sentence_is_not_a_name(sentence):
+    """The No. 009 fix must not flag an ordinary opening word just because a name follows it."""
+    mod = _assemble_module()
+    src = "Durov nega falha RCE nos widgets do Telegram e Apple lança iPhone; Google responde"
+    assert mod.unsupported([sentence], src, False) == []

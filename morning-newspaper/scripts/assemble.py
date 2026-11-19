@@ -250,6 +250,44 @@ STOP_CAPS = {"o", "a", "os", "as", "um", "uma", "the", "el", "la", "los", "las",
              "da", "and", "e", "y", "in", "on", "of", "por", "para", "com", "con", "with", "un", "una", "an"}
 
 
+# Common words that open a sentence before a name ("Após Durov negar…", "After Apple…"). The first
+# word of a sentence counts as a possible name only when it is not one of these (or an attribution
+# word, or an adverb in -mente / -ly).
+SENTENCE_OPENERS = {
+    # pt
+    "apos", "antes", "depois", "durante", "desde", "entre", "sobre", "contra", "pelo", "pela", "pelos",
+    "pelas", "sem", "sob", "ate", "ante", "perante", "segundo", "conforme", "tambem", "ainda", "hoje",
+    "ontem", "amanha", "agora", "enquanto", "mas", "porem", "contudo", "entretanto", "todavia", "assim",
+    "alem", "apesar", "embora", "quando", "onde", "como", "porque", "pois", "logo", "mesmo", "nem",
+    "nesta", "neste", "nessa", "nesse", "naquela", "naquele", "esta", "este", "essa", "esse", "isso",
+    "isto", "aquela", "aquele", "cada", "todo", "toda", "todos", "todas", "outro", "outra", "outros",
+    "outras", "muitos", "muitas", "varios", "varias", "alguns", "algumas", "nenhum", "nenhuma", "para",
+    "pra", "aos", "nos", "nas", "dos", "das", "num", "numa", "seu", "sua", "seus", "suas", "ja", "so",
+    "cerca", "quase", "apenas", "somente", "tambem", "talvez", "enfim", "afinal", "entao", "agora",
+    "segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo",
+    # en
+    "after", "before", "during", "since", "until", "while", "although", "though", "because", "when",
+    "where", "with", "without", "within", "about", "against", "among", "between", "under", "over",
+    "from", "into", "through", "also", "still", "today", "yesterday", "tomorrow", "now", "but", "yet",
+    "meanwhile", "however", "instead", "despite", "this", "that", "these", "those", "each", "every",
+    "other", "some", "many", "most", "several", "their", "its", "his", "her", "our", "your", "both",
+    "such", "even", "only", "just", "nearly", "almost", "then", "there", "here", "what", "which",
+    "who", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    # es
+    "tras", "antes", "despues", "durante", "desde", "entre", "sobre", "contra", "hasta", "segun",
+    "tambien", "todavia", "hoy", "ayer", "manana", "ahora", "mientras", "pero", "aunque", "cuando",
+    "donde", "como", "porque", "pues", "esta", "este", "estos", "estas", "cada", "todo", "toda",
+    "todos", "todas", "otro", "otra", "otros", "otras", "muchos", "muchas", "varios", "varias",
+    "algunos", "algunas", "ningun", "ninguna", "para", "sus", "solo", "casi", "lunes", "martes",
+    "miercoles", "jueves", "viernes", "sabado",
+}
+
+
+def _opener(tok):
+    f = _fold(tok)
+    return f in SENTENCE_OPENERS or f in ATTRIBUTION or f.endswith(("mente", "ly"))
+
+
 # Words that only attribute a fact to its outlet ("Segundo o BPMoney, …"): the rules ask for this
 # when only a small outlet backs a story, so they never count as facts the source lacks.
 ATTRIBUTION = {"segundo", "conforme", "according", "segun", "informa", "informou", "reporta", "relata",
@@ -295,8 +333,8 @@ def unsupported(written, source, empty_summary):
                     continue
                 # The first word of a sentence is always capitalized, so it counts as a name only when
                 # the next word is capitalized too ("Pavel Durov negou…", edition No. 009).
-                if i == 0 and not (len(toks) > 1 and toks[1][:1].isupper()
-                                   and toks[1].lower() not in STOP_CAPS):
+                if i == 0 and (_opener(tok) or not (len(toks) > 1 and toks[1][:1].isupper()
+                                                    and toks[1].lower() not in STOP_CAPS)):
                     continue
                 if not (_stems(tok) <= src) and _fold(tok) not in src_words:
                     names.append(tok)
