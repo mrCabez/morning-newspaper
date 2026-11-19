@@ -1102,3 +1102,41 @@ def test_copies_outside_the_newsstand_never_tune_keywords(assembler):
     assert "KEYWORDS:" not in proc.stdout
     cfg = json.loads((assembler.tmp / "config.json").read_text(encoding="utf-8"))
     assert "keywords_log" not in cfg
+
+
+# ---------------------------------------------------------------- edition No. 009 report
+
+def _assemble_module():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("assemble_mod", SCRIPTS / "assemble.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_name_opening_a_sentence_is_checked():
+    """"Pavel Durov negou…": the first name was added from memory and never flagged, because the
+    first word of every sentence was skipped."""
+    mod = _assemble_module()
+    src = "Widgets do Telegram, Durov nega falha RCE e lança desafio aos hackers"
+    notes = mod.unsupported(["Pavel Durov negou a falha nos widgets do Telegram."], src, False)
+    assert any("names not in the source" in n and "Pavel" in n for n in notes)
+    # An ordinary capitalized first word is still not a name
+    assert mod.unsupported(["Durov nega falha RCE e lança desafio aos hackers."], src, False) == []
+    assert mod.unsupported(["Widgets do Telegram: Durov nega falha RCE."], src, False) == []
+
+
+@pytest.mark.parametrize("key,app", [("classifieds", "Gmail"), ("agenda", "Google Calendar")])
+def test_missing_connector_key_warns(assembler, key, app):
+    del assembler.edition[key]
+    proc = ok(assembler.run())
+    warn = [l for l in proc.stdout.splitlines() if l.startswith("WARNING:") and f'no "{key}" key' in l]
+    assert warn and app in warn[0] and f'"{key}": []' in warn[0]
+
+
+def test_connector_keys_present_or_failed_do_not_warn(assembler):
+    assembler.edition["classifieds"] = []
+    del assembler.edition["agenda"]
+    assembler.edition["agenda_error"] = True
+    proc = ok(assembler.run())
+    assert "key: the" not in proc.stdout

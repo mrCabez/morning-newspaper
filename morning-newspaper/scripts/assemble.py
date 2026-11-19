@@ -291,7 +291,12 @@ def unsupported(written, source, empty_summary):
         for sentence in re.split(r"(?<=[.!?:;])\s+|\n", field or ""):
             toks = re.findall(r"[\w][\w'’-]*", sentence)
             for i, tok in enumerate(toks):
-                if i == 0 or not tok[:1].isupper() or tok.lower() in STOP_CAPS:
+                if not tok[:1].isupper() or tok.lower() in STOP_CAPS:
+                    continue
+                # The first word of a sentence is always capitalized, so it counts as a name only when
+                # the next word is capitalized too ("Pavel Durov negou…", edition No. 009).
+                if i == 0 and not (len(toks) > 1 and toks[1][:1].isupper()
+                                   and toks[1].lower() not in STOP_CAPS):
                     continue
                 if not (_stems(tok) <= src) and _fold(tok) not in src_words:
                     names.append(tok)
@@ -919,6 +924,15 @@ def build():
     has_agenda = isinstance(ed.get("agenda"), list) and not agenda_failed
     has_mail = isinstance(ed.get("classifieds"), list) and not mail_failed
     agenda = ed.get("agenda") if has_agenda else []
+    # A missing key prints "not connected". Easy to leave out by mistake when the connector WAS read
+    # and came back empty (edition No. 009 said "Gmail not connected" over an empty inbox): say so.
+    if not (a.share or a.sample or ed.get("sample")):
+        for key, err, box, app in (("agenda", "agenda_error", "the agenda box", "Google Calendar"),
+                                   ("classifieds", "classifieds_error", "the classifieds box", "Gmail")):
+            if key not in ed and not ed.get(err):
+                warnings.append(f"no \"{key}\" key: {box} will say {app} is not connected. If {app} was read "
+                                f"(even with nothing in it), write \"{key}\": [] instead; leave it out only "
+                                f"when {app} is not connected")
     classifieds = []
     for i, c in enumerate(ed.get("classifieds") if has_mail else []):
         c = dict(c)
