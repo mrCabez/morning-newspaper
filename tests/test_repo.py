@@ -41,6 +41,8 @@ def test_plugin_marketplace_points_to_this_version():
     assert source["url"] == "https://github.com/oantuneshenriqueo/morning-newspaper.git"
     assert source["path"] == SKILL.name
     assert source["ref"] == f"v{VERSION}"
+    # claude.ai / desktop sync needs strict: false when the plugin has no plugin.json.
+    assert plugin["strict"] is False
     assert (ROOT / source["path"] / "SKILL.md").is_file()
     # The entry is the manifest: a plugin.json would need to agree with it.
     assert not (SKILL / ".claude-plugin").exists()
