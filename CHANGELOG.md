@@ -2,6 +2,16 @@
 
 All notable changes to Morning Newspaper. Each release on GitHub uses the matching section below as its notes.
 
+## v1.12.0 — 2026-11-19
+
+### New
+- **Install as a plugin, with updates on their own.** This repository is now a plugin marketplace. In the Claude desktop app: **Customize → Plugins → Add marketplace**, enter `oantuneshenriqueo/morning-newspaper`, keep **Sync automatically** on and install **morning-newspaper**. In Claude Code: `/plugin marketplace add oantuneshenriqueo/morning-newspaper`, then `/plugin install morning-newspaper@morning-newspaper`. The plugin always holds the latest release, never unreleased work. If you used the zip before, delete that skill after installing the plugin so Claude does not see two copies; your newsstand is not touched. In the desktop app a plugin skill may not show in the `/` menu: type `/morning-newspaper:morning-newspaper` or just ask for your morning newspaper.
+
+### Fixed
+From the debug report of scheduled edition No. 009.
+- **Classifieds said "Gmail not connected" over an empty inbox.** An inbox that was read and has nothing waiting for a reply is now `[]`, and `assemble.py` warns when the agenda or classifieds key is missing, since that prints "not connected".
+- **A name added from memory at the start of a sentence went unchecked** ("Pavel Durov negou…"). The first word now counts as a possible name when a capitalized word follows it, unless it is an ordinary opening word ("Após", "Segundo", "Também", "After", "Tras", adverbs in -mente / -ly).
+
 ## v1.11.0 — 2026-11-18
 
 From the debug reports of scheduled editions No. 007 and No. 008.
