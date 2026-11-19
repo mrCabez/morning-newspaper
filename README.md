@@ -27,6 +27,15 @@ The default name follows your language (**Morning Newspaper** in English, **O Jo
 
 **Updating:** see what changed in the [changelog](CHANGELOG.md), download `morning-newspaper.zip` from the [latest release](https://github.com/oantuneshenriqueo/morning-newspaper/releases/latest), open the `morning-newspaper` skill in **Customize → Skills** and replace it with the new zip. Your settings and past editions live in your newsstand, so nothing is lost. If the upload fails with a generic error, delete the old skill and upload the zip as a new one.
 
+### Or install as a plugin (updates on its own)
+
+This repository is also a plugin marketplace. Add it once and new releases arrive without downloading the zip again.
+
+- **Claude Code:** run `/plugin marketplace add oantuneshenriqueo/morning-newspaper`, then `/plugin install morning-newspaper@morning-newspaper`.
+- **Claude desktop app:** open **Customize → Plugins**, choose **Add marketplace**, enter `oantuneshenriqueo/morning-newspaper` and install **morning-newspaper**.
+
+If you used the zip before, turn off or delete that skill after installing the plugin, so Claude does not see two copies. Your newsstand is not touched.
+
 Connect **Google Calendar** and **Gmail** if you want the agenda and the classifieds (on the phone, the app's own calendar also works). Without them, those boxes say they are not connected.
 
 ## First run
@@ -55,6 +64,7 @@ morning-newspaper/            the skill (this folder is what goes in the zip)
   assets/edition.html         edition template
   assets/archive.html         newsstand page
   assets/i18n/*.json          UI labels (en, pt-BR, es)
+.claude-plugin/marketplace.json  plugin marketplace (points to the skill folder at the latest release tag)
 dist/morning-newspaper.zip    development build (may be ahead of the latest release)
 build-zip.sh                  rebuilds the zip
 tests/                        automated tests (pytest, offline)
@@ -67,7 +77,7 @@ docs/brand/                   banner, logo and emblem (SVG)
 - Add a language: copy `morning-newspaper/assets/i18n/en.json` to `<code>.json` and translate the values. Keep the `{placeholders}` and the order of weekdays (Monday first) and months.
 - After changing the skill, run `./build-zip.sh` so `dist/` stays in sync. `dist/` follows `main` and can hold unreleased changes; users should install from Releases.
 - Versions follow [Semantic Versioning](https://semver.org): PATCH for fixes, MINOR for new features that keep existing configs and newsstands working, MAJOR when updating requires the user to change something (the changelog then explains how).
-- Releases are automatic: bumping the number in `VERSION` (or pushing a tag like `v1.1.0`) runs `.github/workflows/release.yml`, which rebuilds the zip and publishes the release using the matching section of `CHANGELOG.md` as its notes. Add a `## vX.Y.Z` section there and update the User-Agent in `scripts/collect.py` in the same commit as `VERSION` (a test checks both). It can also be run by hand from the Actions tab.
+- Releases are automatic: bumping the number in `VERSION` (or pushing a tag like `v1.1.0`) runs `.github/workflows/release.yml`, which rebuilds the zip and publishes the release using the matching section of `CHANGELOG.md` as its notes. Add a `## vX.Y.Z` section there, and update the User-Agent in `scripts/collect.py` and the plugin entry in `.claude-plugin/marketplace.json` (`version` and `ref`) in the same commit as `VERSION` (a test checks all three). It can also be run by hand from the Actions tab.
 - Tests: `pip install pytest` and run `python -m pytest`. They run offline and also run on GitHub for every push and pull request; a release is only published when they pass. Known bugs are marked `xfail`; when you fix one, its test starts passing and the run fails until you remove the mark.
 - Never commit a real `config.json`, edition or newsstand index: they contain personal data. `.gitignore` already blocks them.
 

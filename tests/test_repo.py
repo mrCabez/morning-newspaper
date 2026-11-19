@@ -28,6 +28,24 @@ def test_user_agent_matches_version():
     assert f"morning-newspaper/{VERSION}" in source
 
 
+def test_plugin_marketplace_points_to_this_version():
+    """Bump the plugin entry (version and tag) together with VERSION, so plugin users get each release."""
+    market = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+    assert market["name"] == "morning-newspaper"
+    assert market["owner"]["name"]
+    [plugin] = market["plugins"]
+    assert plugin["name"] == "morning-newspaper"
+    assert plugin["version"] == VERSION
+    source = plugin["source"]
+    assert source["source"] == "git-subdir"
+    assert source["url"] == "https://github.com/oantuneshenriqueo/morning-newspaper.git"
+    assert source["path"] == SKILL.name
+    assert source["ref"] == f"v{VERSION}"
+    assert (ROOT / source["path"] / "SKILL.md").is_file()
+    # The entry is the manifest: a plugin.json would need to agree with it.
+    assert not (SKILL / ".claude-plugin").exists()
+
+
 def frontmatter():
     text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
     m = re.match(r"---\n(.*?)\n---\n", text, re.S)
