@@ -662,7 +662,7 @@ def sections_html(cfg, sections, L):
             pending_half = None
 
     for sec in cfg["sections"]:
-        items = sections.get(sec["id"]) or []
+        items = [n for n in sections.get(sec["id"]) or [] if not n.get("brief")]
         if not items:
             continue
         layout = sec.get("layout", "single")
@@ -687,6 +687,34 @@ def sections_html(cfg, sections, L):
             out.append(single(sec, items))
     flush()
     return "".join(out)
+
+
+def briefs_html(cfg, sections, L):
+    """The "In brief" column: stories that only have their title, one line each with the source,
+    grouped by section in the config's order. Nothing when there is none."""
+    groups = []
+    for sec in cfg["sections"]:
+        items = [n for n in sections.get(sec["id"]) or [] if n.get("brief")]
+        if not items:
+            continue
+        lines = "".join(f'<p class="breve">{esc(n.get("title", ""))} <a href="{esc(n.get("url", ""))}" '
+                        f'target="_blank" rel="noopener">{esc(n.get("outlet", ""))}</a></p>\n' for n in items)
+        groups.append(f'<div class="breve-sec sc">{esc(sec["title"])}</div>\n{lines}')
+    if not groups:
+        return ""
+    return (f'<section class="breves">\n<div class="cab sc">{esc(L["briefs_title"])}</div>\n'
+            + "".join(groups) + "</section>\n")
+
+
+def echoes(item, base):
+    """True when a printed text tells nothing its title does not: fewer than 3 meaningful words
+    beyond the collected title, the printed title and the outlet's name."""
+    known = _stems(" ".join(str(x or "") for x in (base.get("title"), item.get("title"), base.get("outlet"),
+                                                   item.get("outlet"))))
+    known4 = {w[:4] for w in known}
+    new = {w for w in _stems(item.get("text", "")) if w not in known and w[:4] not in known4
+           and w not in {a[:5] for a in ATTRIBUTION}}
+    return len(new) < 3
 
 
 def main():
@@ -734,6 +762,7 @@ def build():
     standalone = a.standalone or a.share or single
 
     errors, warnings = [], []
+    BRIEFED.clear()
     with open(a.config, encoding="utf-8") as f:
         cfg = json.load(f)
     with open(os.path.join(a.work, "edition.json"), encoding="utf-8") as f:
@@ -817,6 +846,9 @@ def build():
             errors.append(f"{where}: must be an object like {{\"ref\": \"a1\", \"title\": \"...\", \"text\": \"...\"}}")
             return {}
         r = dict(item)
+        # A section story only its title backs becomes a brief below: it needs no text.
+        title_only = where != "headline" and not item.get("url") and r.get("ref") in refs \
+            and not (refs[r["ref"]].get("summary") or "").strip()
         if r.get("ref"):
             base = refs.get(r["ref"])
             if not base:
@@ -831,7 +863,7 @@ def build():
             errors.append(f"{where}: missing link or not https")
         if not r.get("outlet"):
             errors.append(f"{where}: missing outlet (source name)")
-        for field in ("title", "text"):
+        for field in (("title",) if r.get("brief") or title_only else ("title", "text")):
             if not (r.get(field) or "").strip():
                 errors.append(f"{where}: missing {field}")
         for q in long_quotes(r.get("title", "")) + long_quotes(r.get("text", "")) + long_quotes(r.get("deck", "")):
@@ -855,6 +887,8 @@ def build():
             warnings.append("headline has more than 14 words")
         if not h.get("deck"):
             errors.append("headline: missing deck")
+    if h.get("brief"):
+        errors.append("headline: a headline is never a brief; pick a story with a summary as headline")
     h_section = h.get("section") or ""
     if not h_section and h.get("ref"):
         sid = next((sid for sid, lst in (collected.get("news") or {}).items()
@@ -871,6 +905,15 @@ def build():
             continue
         sections[sid] = [r for r in (resolve(n, f"{sid}[{i}]") for i, n in enumerate(items or [])) if r]
         for n in sections[sid]:
+            base = refs.get(n.get("ref") or "")
+            # A story only its title backs has nothing to tell beyond that title: it is printed as a
+            # brief (title and source), never as a paragraph that restates the title.
+            if base and not n.get("brief") and not (base.get("summary") or "").strip() \
+                    and n.get("url") == base.get("url"):
+                n["brief"] = True
+                BRIEFED.append(n["ref"])
+            if n.get("brief"):
+                n["text"] = ""
             if word_count(n.get("title")) > 12:
                 warnings.append(f"{sid}: title over 12 words: {n.get('title', '')[:40]}")
     # A weekday next to a day number is checked against the calendar ("segunda-feira, 17" when the
@@ -915,6 +958,7 @@ def build():
     for sid, lst in sections.items():
         rng = ((next((s for s in cfg["sections"] if s["id"] == sid), {}).get("count") or {})
                .get("weekend" if weekend else "weekday") or [])
+        lst = [n for n in lst if not n.get("brief")]  # a one-line brief does not take a story's place
         if len(rng) > 1 and len(lst) > rng[1]:
             warnings.append(f"{sid}: {len(lst)} stories, above its count of {rng[0]}-{rng[1]} "
                             "(the headline does not count): drop the weakest")
@@ -1098,7 +1142,8 @@ def build():
         # Legacy (v1.4.0-v1.4.1): alerts now go in the edition summary; still accepted so older
         # edition files build. One neutral line, never which account or what happened.
         "security_alert": has_mail and bool(ed.get("security_alert")) and not a.share,
-        "SECTIONS_HTML": sections_html(cfg, sections, L), "week": bool(week),
+        "SECTIONS_HTML": sections_html(cfg, sections, L), "BRIEFS_HTML": briefs_html(cfg, sections, L),
+        "week": bool(week),
         "extras": bool(hist.get("text") or dyk.get("text")),
         "history": bool(hist.get("text")), "HISTORY": hist.get("text", ""),
         "url_history": str(hist.get("url", "")).startswith("https://"), "URL_HISTORY": hist.get("url", ""),
@@ -1135,6 +1180,7 @@ def build():
     # What step 7 should look at first: printed names, numbers and hedges the collected text does not
     # back. A headline with its own researched page is checked by the model against that page.
     CHECKS.clear()
+    ECHOES.clear()
     items = [("headline", h)] if h and not (h.get("url") and h.get("url") != (refs.get(h.get("ref")) or {}).get("url")) else []
     base_h = refs.get(h.get("ref") or "") if h else None
     if base_h and h.get("url") and h.get("url") != base_h.get("url") and base_h.get("outlet") \
@@ -1156,6 +1202,12 @@ def build():
         source = " ".join(str(base.get(k) or "") for k in ("year", "title", "summary", "text", "extract", "outlet"))
         written = [str(item.get(k) or "") for k in ("title", "deck", "text")]
         title_only = "id" in base and not (base.get("summary") or base.get("text") or base.get("extract"))
+        if item.get("brief"):
+            title_only = False  # a brief is its title: only names and numbers are worth a look
+        elif base.get("summary") and item.get("text") and echoes(item, base):
+            ECHOES.append(f"{where}" + (f" ({item['ref']})" if item.get("ref") and item["ref"] != where else "")
+                          + ": the text only restates the title; tell what the collected summary adds "
+                            "(who, where, when, how many, what happens next), or set \"brief\": true")
         for note in unsupported(written, source, title_only):
             CHECKS.append(f"{where}" + (f" ({item['ref']})" if item.get("ref") and item["ref"] != where else "")
                           + f": {note}")
@@ -1218,7 +1270,8 @@ def build():
         "source_titles": [refs[n["ref"]].get("title", "") for n in stories if n.get("ref") in refs],
         # Fingerprints, not the links: Google News redirect URLs are long, and the index is read by
         # every edition. collect.py compares fingerprints the same way.
-        "link_ids": sorted({link_id(n.get("url", "")) for n in stories if n.get("url")}),
+        "link_ids": sorted({link_id(u) for n in stories
+                            for u in (n.get("url"), (refs.get(n.get("ref") or "") or {}).get("alt_url")) if u}),
     }
     if kw_fit:
         # Per section [candidates, off-topic ones]: the ground for adjusting keywords (KW_WINDOW editions).
@@ -1280,7 +1333,8 @@ def build():
     elif legacy:
         print("LEGACY NEWSSTAND MIGRATED: the index now lives in editions/index.json. Publish every file below "
               "and, if the tool can delete files, remove edicoes/indice.json in the same call.")
-    if (index is None or legacy or a.with_config or kw_changes or kw_dirty) and not sample:
+    config_changed = bool(collected.get("config_changed")) or os.path.exists(os.path.join(a.work, "config.changed"))
+    if (index is None or legacy or a.with_config or kw_changes or kw_dirty or config_changed) and not sample:
         shutil.copy(a.config, os.path.join(dest, "config.json"))
         publish.append("config.json")
     print(f"OK: {L['issue_label']} {number:03d} · {day.isoformat()} · {total} stories"
@@ -1305,10 +1359,17 @@ def coverage(total, filled, empty, titles):
 
 
 CHECKS = []
+ECHOES = []    # texts that only restate their title
+BRIEFED = []   # title-only stories the script printed as briefs
 
 
 def next_steps(single, standalone=False):
     """What is left after the files are written, printed where the model reads it."""
+    if BRIEFED:
+        print("BRIEFS: " + ", ".join(BRIEFED) + " printed in the briefs column (title and source only): only "
+              "their title backs them. Nothing to fix.")
+    for e in ECHOES:
+        print("ECHO:", e)
     for c in CHECKS:
         print("CHECK:", c)
     if CHECKS:

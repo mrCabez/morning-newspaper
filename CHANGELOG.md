@@ -2,6 +2,20 @@
 
 All notable changes to Morning Newspaper. Each release on GitHub uses the matching section below as its notes.
 
+## Unreleased
+
+From the debug report of scheduled edition No. 010: the story texts had become the headline reworded, because most candidates come from Google News searches, which send no summary.
+
+### New
+- **Stories with substance.** `collect.py` reads the opening of the story's own page for the first title-only candidates of each section (`scripts/enrich.py`): the page's description or first paragraphs, cut near 380 characters. Google News links are turned into the outlet's address through the outlet's own search feed or Google News' own lookup, and the printed link then points to the outlet. A page dated before the window flags the candidate `old page? MM-DD`. Capped at 18 pages and 45 seconds per edition.
+- **"In brief" column.** A story with only its title is printed as one line with its source (`"brief": true`), never as a paragraph that restates the title; `assemble.py` does it by itself (`BRIEFS:`). A text that only restates its title gets an `ECHO:` line.
+- **Summaries win.** Between stories of similar relevance, the one with a summary is chosen, in every slot. When two candidates tell the same fact, the one with a summary is kept. Photo captions at the start of a feed's description (g1 and other portals) are removed, and a description that is only a caption no longer counts as a summary.
+- **Nearby places.** `scripts/cities.py` builds, once per city, the list of towns, villages and districts within `region.radius_km` (60 by default) with their distance: IBGE in Brazil, GeoNames elsewhere, and a list written by the model only when no source answers (replaced by real data after 30 days). No population cut. Local candidates are flagged `near Salto 9km`, `city (district)`, `other state? RN` or `where?`, and sorted by distance.
+- **Direct feeds.** `scripts/feeds.py` finds the own RSS feeds of the outlets that bring each section's stories and checks that they carry summaries; setup offers to add them.
+
+### Changed
+- The fallback headline is written in up to 3 sentences, as many as its title and summary back.
+
 ## v1.12.0 — 2026-11-19
 
 ### New

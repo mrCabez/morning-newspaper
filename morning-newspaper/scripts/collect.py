@@ -12,8 +12,14 @@ It writes everything to WORK/collected.json (used later by assemble.py) and prin
 summary with a short ID per story (a1, b3, ...; h1... for history), which is what the model reads.
 Every run also appends its command and output to WORK/run.log (for debug reports; the model does not read it).
 
-Standard library only. Only performs read-only GET requests to the hosts listed in the config
-and to wttr.in, api.open-meteo.com and *.wikipedia.org. Only writes inside WORK.
+It also reads the opening of the first candidates' own pages (enrich.py), so a story that came
+with only its title gets its outlet's own lead, and, once per city, builds the list of nearby
+places of the local section (cities.py), stored in WORK/config.json as "region".
+
+Standard library only. Only performs read requests: GET to the hosts listed in the config, to
+the candidate stories' own pages and their outlets' search feeds, wttr.in, api.open-meteo.com,
+*.wikipedia.org, IBGE and GeoNames (the nearby places, once), plus Google News' own lookup that
+turns its redirect links into the outlet's address. Only writes inside WORK.
 
 With --from-results FILE it touches no network at all: it takes the web search results the model
 gathered (when the sources are blocked, see "No network" in SKILL.md) and applies the same filters,
@@ -39,6 +45,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import cities  # noqa: E402  (same folder)
+import enrich  # noqa: E402
 
 try:
     from zoneinfo import ZoneInfo
@@ -229,6 +239,21 @@ def fetch(url, tries=2):
             if n + 1 >= tries or e.code not in (429, 500, 502, 503, 504):
                 raise
             time.sleep(retry_wait(e, n))
+
+
+def get(url, limit=MAX_BYTES):
+    """GET for enrich.py: limit=None reads the whole answer (Google News' redirect page)."""
+    req = urllib.request.Request(url, headers={"User-Agent": UA, "Accept": "*/*"})
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        return r.read() if limit is None else r.read(limit)
+
+
+def post(url, body):
+    """The one non-GET request: Google News' own read-only lookup of an article's address."""
+    req = urllib.request.Request(url, data=body.encode(), headers={
+        "User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8"})
+    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+        return r.read(200_000)
 
 
 def retry_wait(err, n):
@@ -538,6 +563,27 @@ def _link(el):
     return ""
 
 
+# A credit line under a photo ("Reuters/Manuel Orbegozo", "Prefeitura de X/Divulgação",
+# "Foto: Fulano"): what comes before it is the photo's caption, not the story.
+CREDIT = (r"^(foto|fotos|imagem|image|photo|cr[eé]dito)s?:|/\s*(divulga[cç][aã]o|reprodu[cç][aã]o|arquivo|"
+                    r"agência|agencia|afp|ap|reuters|getty|efe)\b|^(reuters|afp|ap|efe|getty images)\b|"
+                    r"^[^.!?]{2,60}/[^.!?]{2,60}$")
+
+
+def without_caption(raw):
+    """A feed description that opens with a photo (g1 and other portals: <img>, the caption, the
+    credit, then the story) keeps only the story. A description that is only a caption becomes ""."""
+    raw = raw or ""
+    if not re.match(r"\s*(<!\[CDATA\[\s*)?<(img|figure|a\b[^>]*>\s*<img)", raw, re.I):
+        return raw
+    lines = [l.strip() for l in html.unescape(re.sub(r"<[^>]+>", "\n", raw)).split("\n")]
+    lines = [l for l in lines if l and l not in ("]]>",)]
+    for i, line in enumerate(lines[:3]):
+        if re.search(CREDIT, line, re.I):
+            return " ".join(lines[i + 1:])
+    return " ".join(lines) if len(lines) > 1 else ""
+
+
 def read_rss(url):
     """Reads RSS 2.0, RSS 1.0 (RDF) and Atom feeds. A document with no items at all, or whose items
     carry no date, raises: the caller reports it in FAILURES instead of silently printing nothing."""
@@ -551,9 +597,10 @@ def read_rss(url):
         link = _link(it)
         link = re.sub(r"^http:(?=//)", "https:", link)  # the paper only links https
         src = _child(it, "source")
-        outlet = ""
+        outlet, site = "", ""
         if src is not None:
             outlet = (src.text or "").strip() or _text(src, "title")
+            site = (src.get("url") or "").strip()
         if outlet and title.endswith(" - " + outlet):  # Google News appends " - Outlet"
             title = title[: -len(" - " + outlet)]
         if not outlet:
@@ -564,11 +611,12 @@ def read_rss(url):
         when = _date(_text(it, "pubDate") or _text(it, "date") or _text(it, "published") or _text(it, "updated"))
         if when is None:
             undated += 1
-        summary = clean(_text(it, "description") or _text(it, "summary") or _text(it, "content"), 160)
+        summary = clean(without_caption(_text(it, "description") or _text(it, "summary") or _text(it, "content")), 160)
         if summary and same_story(summary, title):
             summary = ""  # Google News descriptions usually repeat the title
         if title and link.startswith("https://"):
-            items.append({"title": title, "outlet": outlet, "url": link, "date": when, "summary": summary})
+            items.append({"title": title, "outlet": outlet, "url": link, "date": when, "summary": summary,
+                          "site": site if site.startswith("https://") else ""})
     if items and undated == len(items):
         raise ValueError("items without dates")
     return items
@@ -600,6 +648,10 @@ def collect_news(cfg, window_h, now, used_links, used_titles, tz):
             except Exception as e:
                 failures.append(f"{sid}: {urllib.parse.urlparse(u).netloc} ({type(e).__name__} {getattr(e, 'code', '')})".replace(" )", ")"))
     return rank_news(cfg, [sid for sid, _ in tasks], results, window_h, now, used_links, used_titles, tz), failures
+
+
+# Nearby places of the reader's city (cities.matcher of config "region"), set in main.
+REGION = {"rows": [], "city": "", "state": ""}
 
 
 # Why candidates were left out, per section, so a missing story never has to be guessed:
@@ -684,8 +736,14 @@ def rank_news(cfg, task_sections, results, window_h, now, used_links, used_title
                 for q in round_queues:
                     if depth < len(q) and len(kept) < limit:
                         it = q[depth]
-                        if not any(it["url"] == k["url"] or same_story(it["title"], k["title"]) for k in kept):
+                        twin = next((j for j, k in enumerate(kept)
+                                     if it["url"] == k["url"] or same_story(it["title"], k["title"])), None)
+                        if twin is None:
                             kept.append(it)
+                        elif it["summary"] and not kept[twin]["summary"]:
+                            # The same fact told with a summary beats the bare title.
+                            drop(sid, "same story as another candidate", kept[twin]["title"])
+                            kept[twin] = it
                         else:
                             drop(sid, "same story as another candidate", it["title"])
                 depth += 1
@@ -695,14 +753,23 @@ def rank_news(cfg, task_sections, results, window_h, now, used_links, used_title
         # Local sections of a small town fill up with the region: the stories that name the city
         # itself come first, so a busy neighbouring town cannot push them out of sight.
         city = (cfg.get("city") or {}).get("name", "")
-        if city and any(names_city(q, city) for q in sec.get("queries", [])):
-            kept.sort(key=lambda x: not names_city(x["title"], city))
+        local = bool(city) and any(names_city(q, city) for q in sec.get("queries", []))
+        if local:
+            # The city first, then the nearest places of the region, then the rest.
+            def where(x):
+                if names_city(x["title"], city):
+                    return 0
+                hit = cities.places_in(x["title"], REGION) if REGION["rows"] else []
+                return 1 + hit[0][1] if hit and not cities.other_state(f"{x['title']} - {x['outlet']}", REGION) else 10_000
+            kept.sort(key=where)
         items = []
         for i, it in enumerate(kept, 1):
             when = ("" if it["date"] is None else it["date"].astimezone(tz).strftime("%Y-%m-%d")
                     if it.get("day_only") else it["date"].astimezone(tz).strftime("%Y-%m-%d %H:%M"))
             n = {"id": f"{pre[sid]}{i}", "title": it["title"], "outlet": it["outlet"], "url": it["url"],
                  "date": when, "summary": it["summary"]}
+            if it.get("site"):
+                n["site"] = it["site"]
             flags = [] if it["date"] is not None else ["date?"]
             group = next((g for g in groups if all(related(it["title"], m) for m in g["titles"])), None)
             if group:
@@ -722,6 +789,16 @@ def rank_news(cfg, task_sections, results, window_h, now, used_links, used_title
                 flags.append("recurring?")
             if city and names_city(it["title"], city):
                 flags.append("city")
+            elif local and REGION["rows"]:
+                elsewhere = cities.other_state(f"{it['title']} - {it['outlet']}", REGION)
+                hit = cities.places_in(it["title"], REGION)
+                if elsewhere:
+                    flags.append(f"other state? {elsewhere}")
+                elif hit:
+                    name, km, seat = hit[0][0], hit[0][1], hit[0][2]
+                    flags.append(f"city ({name})" if km == 0 and seat else f"near {name} {km}km")
+                else:
+                    flags.append("where?")
             if keywords and not fits(it):
                 flags.append("fit?")
             if flags:
@@ -729,6 +806,64 @@ def rank_news(cfg, task_sections, results, window_h, now, used_links, used_title
             items.append(n)
         out[sid] = items
     return out
+
+
+# ---------------------------------------------------------------- the stories' own pages
+
+ENRICH_MAX = 18       # pages read per edition, all sections together
+ENRICH_SECONDS = 45   # the whole step; a slow site never holds the edition back
+# Candidates the model will almost surely leave out: not worth a page.
+ENRICH_SKIP = ("printed?", "earlier?", "old month?", "other state?")
+
+
+def enrich_news(cfg, news, cutoff, tz):
+    """Reads the lead of the first title-only candidates of each section from their own pages
+    (enrich.py) and fills their summary. Returns how many got one. Never raises."""
+    queues = []
+    for sec in cfg["sections"]:
+        rng = ((sec.get("count") or {}).get("weekday") or [1, 2])
+        k = sec.get("enrich", min(6, int(rng[-1] if rng else 2) + 2))
+        queues.append([n for n in news.get(sec["id"]) or []
+                       if not n["summary"] and not any(str(f).startswith(ENRICH_SKIP) for f in n.get("flags", []))][:k])
+    picks = []
+    for depth in range(max([len(q) for q in queues] + [0])):  # take turns between sections
+        picks += [q[depth] for q in queues if depth < len(q)]
+    picks = picks[:ENRICH_MAX]
+    if not picks:
+        return 0
+    deadline = time.time() + ENRICH_SECONDS
+
+    def in_time(fn):
+        def call(*a, **k):
+            if time.time() > deadline:
+                raise TimeoutError("enrichment time is up")
+            return fn(*a, **k)
+        return call
+
+    deps = {"get": in_time(get), "post": in_time(post), "read_feed": in_time(read_rss),
+            "story_words": _story_words, "same_story": same_story}
+    done = 0
+    ex = cf.ThreadPoolExecutor(max_workers=8)
+    futures = {ex.submit(enrich.enrich_one, n, deps): n for n in picks}
+    try:
+        for f in cf.as_completed(futures, timeout=ENRICH_SECONDS + 5):
+            n = futures[f]
+            try:
+                res = f.result()
+            except Exception:
+                continue
+            if res.get("page_url") and res["page_url"] != n["url"]:
+                n["alt_url"], n["url"] = n["url"], res["page_url"]
+            if res.get("summary"):
+                n["summary"], n["summary_from"] = res["summary"], "page"
+                done += 1
+            when = res.get("published")
+            if when is not None and when < cutoff:
+                n.setdefault("flags", []).append(f"old page? {when.astimezone(tz).strftime('%m-%d')}")
+    except cf.TimeoutError:
+        pass
+    ex.shutdown(wait=False, cancel_futures=True)
+    return done
 
 
 # ---------------------------------------------------------------- results gathered by the model
@@ -1037,11 +1172,15 @@ def main():
 
     weekend = day.weekday() >= 5
     window = 72 if day.weekday() in (0, 5, 6) else 48
+    city_name = (cfg.get("city") or {}).get("name", "")
+    REGION.clear()
+    REGION.update(cities.matcher(cfg.get("region"), city_name))
     number = max([e.get("number") or e.get("numero") or 0 for e in previous] + [0]) + 1
     reissue = next((e.get("number") or e.get("numero") for e in editions
                     if (e.get("date") or e.get("data")) == day.isoformat()), None)
 
     problems, did_you_know = [], []
+    config_changed, enriched, region_note = False, 0, ""
     if a.from_results:
         try:
             task_sections, results, weather, events, problems = from_results(a.from_results, cfg, tz, now)
@@ -1055,7 +1194,31 @@ def main():
     elif network_blocked(cfg, day):
         news, weather, history, failures = {s["id"]: [] for s in cfg["sections"]}, None, [], ["network: no source answered"]
     else:
+        # Nearby places, built once per city by the script (never by reading data into the model).
+        region_note = ""
+        if cities.needs_build(cfg, day):
+            region, notes = _safe(cities.build, cfg) or (None, ["unexpected error"])
+            if region:
+                cfg["region"] = region
+                REGION.clear()
+                REGION.update(cities.matcher(region, city_name))
+                try:
+                    with open(a.config, "w", encoding="utf-8") as f:
+                        json.dump(cfg, f, ensure_ascii=False, indent=2)
+                    config_changed = True
+                    region_note = (f"REGION: list of {len(region['places'])} nearby places built from {region['source']} "
+                                   f"({region['radius_km']} km); assemble.py publishes the updated config.json")
+                except OSError:
+                    region_note = "REGION: built, but config.json could not be saved (it is rebuilt next time)"
+            elif not (cfg.get("region") or {}).get("places"):
+                region_note = ("REGION: no list of nearby places yet; no source answered (" + "; ".join(notes)
+                               + "). Write WORK/region.json with the towns, villages and districts within 60 km of "
+                               f"{city_name}, as {{\"radius_km\": 60, \"places\": [[\"Town\", 25], [\"District\", 8, "
+                               "\"its town\"]]}} (km in a straight line, best known values) and run python3 SKILL/scripts/"
+                               "cities.py --config WORK/config.json --from-model WORK/region.json --write before "
+                               "assemble.py. Once only: the scripts replace it with real data later")
         news, failures = collect_news(cfg, window, now, used_links, used_titles, tz)
+        enriched = enrich_news(cfg, news, now - dt.timedelta(hours=window), tz)
         weather, wf = collect_weather(cfg)
         failures += wf
         try:
@@ -1076,7 +1239,7 @@ def main():
            "window_hours": window, "weather": weather, "news": news, "history": history,
            "did_you_know_theme": dyk_theme(cfg, day), "did_you_know": did_you_know,
            "did_you_know_used": [s for s in used_didyouknow if s][:30], "failures": failures,
-           "network_blocked": blocked, "from_results": bool(a.from_results),
+           "network_blocked": blocked, "from_results": bool(a.from_results), "config_changed": config_changed,
            "generated_at": now.isoformat(timespec="minutes")}
     with open(os.path.join(a.work, "collected.json"), "w", encoding="utf-8") as f:
         json.dump(out, f, ensure_ascii=False, indent=1)
@@ -1103,12 +1266,18 @@ def main():
               " before using it · printed? = may be a fact a recent edition already printed: leave it out"
               " unless it brings something new · earlier? 11-13 = the same fact came out on that date,"
               " before the window: probably a republication, leave it out unless it brings something new"
-              " · fit? = carries none of the section's keywords: use it only if the title or summary shows it fits")
+              " · fit? = carries none of the section's keywords: use it only if the title or summary shows it fits"
+              " · near X 12km = names a place of the reader's region, that far from the city · city (X) = names a"
+              " district of the reader's city · other state? MG = the place named is probably a namesake in that"
+              " state: leave it out · where? = a local candidate that names no place of the region: use it only if"
+              " its summary shows it is local · old page? 11-17 = the story's own page is dated before the window:"
+              " leave it out")
     all_news = [n for lst in news.values() for n in lst]
     if all_news:
         with_summary = sum(1 for n in all_news if n["summary"])
-        print(f"SUMMARIES: {with_summary} of {len(all_news)} candidates have one (shown after —); the others"
-              " carry only their title (Google News search feeds send no summary), so their text only restates it")
+        print(f"SUMMARIES: {with_summary} of {len(all_news)} candidates have one (shown after —"
+              + (f"; {enriched} read from the story's own page" if enriched else "") + "). A story with a summary"
+              " gets the text; one with only its title can only be a brief (SKILL.md step 4)")
     # Keyword review: a section that already brought many off-topic candidates in 2 of the last 4
     # editions (assemble.py counts them from edition.json's "off_topic"). If today is the same,
     # the model may propose keywords; assemble.py applies them only with 3 of 5 (SKILL.md, step 4).
@@ -1154,6 +1323,8 @@ def main():
         print(f"{d['id']} | {d['title']}{'' if d['lang'] == wiki_lang(cfg) else ' [' + d['lang'] + ']'} | {d['text']}")
     if out["did_you_know_used"]:
         print("[did_you_know already used] " + " / ".join(out["did_you_know_used"][:15]))
+    if region_note:
+        print("\n" + region_note)
     if DROPPED:
         print("\nDROPPED (left out by the script, not by you):")
         for line in dropped_lines():

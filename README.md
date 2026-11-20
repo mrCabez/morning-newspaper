@@ -11,13 +11,15 @@ The default name follows your language (**Morning Newspaper** in English, **O Jo
 ## Features
 
 - **Speaks your language.** The repository is in English, but the newspaper, the setup questions and Claude's replies follow the reader's language. English, Brazilian Portuguese and Spanish labels ship with the skill. For any other language, Claude translates the labels during setup.
-- **Your sections, your sources.** Technology, local news, finance, games or anything else. Each section has its own search queries, optional RSS feeds and a layout (wide, half-width pair or single box).
+- **Your sections, your sources.** Technology, local news, finance, games or anything else. Each section has its own search queries, optional RSS feeds and a layout (wide, half-width pair or single box). After the first edition Claude can find your outlets' own feeds, which bring stories with a summary.
+- **Stories with substance.** For the first candidates of each section that came with only a title, the script reads the opening of the story's own page, so the text tells what happened instead of rewording the headline. A story that still has only its title goes to the "In brief" column, one line with its source.
+- **Knows your region.** The local section knows which towns, villages and districts are near you and how far, from your country's statistics office when the skill has a provider for it (Brazil: IBGE) or from GeoNames, built once by the script with no population cut.
 - **Today's Column and Classifieds.** Pulls today's events from Google Calendar and the emails that are still waiting for an answer from Gmail.
 - **Weather, "On this day" and "Did you know?"**, all checked against a source.
 - **Cheap to run.** Two small Python scripts do the heavy lifting: news gathering through RSS, weather, history facts, HTML building, newsstand index and checks. Claude only reads a compact summary, picks the stories and writes a short JSON. An edition costs roughly a third of what a do-everything-by-hand prompt would.
-- **Works with limited network access.** If Claude's network settings block the news, weather or Wikipedia sources, Claude gathers with web search and the script still filters the results (date window, repeats, subjects to avoid). To use the faster path, allow `news.google.com`, `wttr.in`, `api.open-meteo.com` and `*.wikipedia.org` in Claude's network settings.
+- **Works with limited network access.** If Claude's network settings block the news, weather or Wikipedia sources, Claude gathers with web search and the script still filters the results (date window, repeats, subjects to avoid). To use the faster path, allow `news.google.com`, `wttr.in`, `api.open-meteo.com` and `*.wikipedia.org` in Claude's network settings (plus `servicodados.ibge.gov.br` or `download.geonames.org` once, for the list of nearby places; reading the stories' own pages needs access to the outlets' sites).
 - **Works where only one page can be published.** Apps that keep a single HTML page per artifact get a **single page** instead of the newsstand: each edition replaces the previous one, and your settings and recent stories are kept inside it.
-- **Safe by design.** Read-only GET requests to public sources. Everything collected is treated as data, never as instructions. It never sends email or edits your calendar. Personal money and health details never reach the page. Your newsstand stays private.
+- **Safe by design.** Read-only requests to public sources. Everything collected is treated as data, never as instructions. It never sends email or edits your calendar. Personal money and health details never reach the page. Your newsstand stays private.
 
 ## Install (claude.ai or the Claude apps)
 
@@ -60,6 +62,9 @@ morning-newspaper/            the skill (this folder is what goes in the zip)
   SKILL.md                    main instructions
   scripts/collect.py          news (Google News RSS + feeds), weather, "On this day"
   scripts/assemble.py         builds the edition HTML and updates the newsstand index
+  scripts/enrich.py           reads the lead of a story's own page (used by collect.py)
+  scripts/cities.py           nearby places of the reader's city (IBGE, GeoNames)
+  scripts/feeds.py            finds the outlets' own RSS feeds
   references/                 setup, writing rules, JSON format, newsstand, style, permissions
   assets/edition.html         edition template
   assets/archive.html         newsstand page
@@ -74,6 +79,7 @@ docs/brand/                   banner, logo and emblem (SVG)
 
 ## Contributing
 
+- Add your country's official list of places: `scripts/cities.py` tries a country's own statistics office before GeoNames (Brazil uses IBGE). A provider is one function that returns the places near the reader with their distance; register it in `PROVIDERS`.
 - Add a language: copy `morning-newspaper/assets/i18n/en.json` to `<code>.json` and translate the values. Keep the `{placeholders}` and the order of weekdays (Monday first) and months.
 - After changing the skill, run `./build-zip.sh` so `dist/` stays in sync. `dist/` follows `main` and can hold unreleased changes; users should install from Releases.
 - Versions follow [Semantic Versioning](https://semver.org): PATCH for fixes, MINOR for new features that keep existing configs and newsstands working, MAJOR when updating requires the user to change something (the changelog then explains how).
