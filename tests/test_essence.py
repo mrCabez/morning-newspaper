@@ -376,5 +376,110 @@ def test_feeds_suggests_feeds_with_summaries(collect_module, monkeypatch, config
     collected = {"news": {"tech": [{"url": "https://news.google.com/rss/articles/1", "site": "https://o.example"},
                                    {"url": "https://news.google.com/rss/articles/2", "site": "https://o.example"},
                                    {"url": "https://p.example/x", "site": ""}]}}
-    found = feeds.suggest(config, collected)
+    found = feeds.suggest(config, collected, now=NOW)
     assert [u for u, *_ in found["tech"]] == ["https://o.example/feed/"]
+
+
+# ---------------------------------------------------------------- review of v1.13.0 (CodeRabbit, PR #9)
+
+def test_reissue_with_a_replaced_link_is_not_a_weaker_edition(assembler):
+    a2 = next(n for n in assembler.collected["news"]["tech"] if n["id"] == "a2")
+    a2["alt_url"] = "https://news.google.com/rss/articles/OLD"
+    ok(assembler.run())
+    index = assembler.new_index()
+    entry = index["editions"][0]
+    assert entry["stories"] < len(entry["link_ids"])  # two fingerprints for one story
+    proc = ok(assembler.run(index=index))
+    assert "KEEP:" not in proc.stdout
+
+
+def test_reissue_with_fewer_stories_than_stored_still_asks(assembler):
+    ok(assembler.run())
+    index = assembler.new_index()
+    index["editions"][0]["stories"] += 5
+    proc = assembler.run(index=index)
+    assert proc.returncode == 3 and "KEEP:" in proc.stdout
+
+
+def test_title_only_story_repeating_its_collected_link_is_a_brief(assembler):
+    a3 = next(n for n in assembler.collected["news"]["tech"] if n["id"] == "a3")
+    assembler.edition["sections"]["tech"].append({"ref": "a3", "title": "Password manager reports a breach",
+                                                  "url": a3["url"], "outlet": a3["outlet"]})
+    assert "BRIEFS: a3" in ok(assembler.run()).stdout
+
+
+def test_a_page_with_no_paragraph_about_the_story_gives_no_summary(enrich, collect_module):
+    page = ("<html><body><p>Quality reporting takes time and resources. Create an account to continue "
+            "reading this article on our website.</p></body></html>")
+    text, _ = enrich.lead(page, "City council approves school budget", collect_module._story_words)
+    assert text == ""
+
+
+def test_the_description_still_serves_when_no_paragraph_is_about_the_story(enrich, collect_module):
+    page = ('<html><head><meta name="description" content="Vereadores aprovaram ontem o orçamento das escolas '
+            'municipais para 2027, com reforço para merenda e transporte."></head><body><p>Quality reporting '
+            'takes time and resources. Create an account to continue reading this article.</p></body></html>')
+    text, _ = enrich.lead(page, "Câmara aprova orçamento das escolas", collect_module._story_words)
+    assert text.startswith("Vereadores aprovaram")
+
+
+def test_site_search_needs_the_same_title_not_the_same_subject(enrich, collect_module):
+    def read_feed(url):
+        return [{"title": "City council approves hospital expansion", "url": "https://o.example/h", "summary": ""}]
+    assert enrich.site_search("https://o.example", "City council approves school budget", read_feed,
+                              collect_module.same_story) is None
+    assert enrich.same_title("Motorista fica ferido após caminhão cair de ponte",
+                             "Motorista fica ferido após caminhão cair de ponte em Salto")
+    assert not enrich.same_title("City council approves school budget", "City council approves hospital expansion")
+
+
+def test_an_old_page_is_flagged_even_without_a_summary(enrich, collect_module):
+    page = ('<html><head><meta property="article:published_time" content="2020-01-01T00:00:00Z"></head>'
+            '<body><p>City council approves school budget</p></body></html>')
+    item = {"title": "City council approves school budget", "outlet": "O", "url": "https://o.example/1"}
+    res = enrich.enrich_one(item, {"get": lambda url, limit=None: page.encode(), "post": None, "read_feed": None,
+                                   "story_words": collect_module._story_words,
+                                   "same_story": collect_module.same_story})
+    assert "summary" not in res and res["published"].year == 2020
+
+
+def test_a_town_holding_a_state_name_is_not_that_state(cities):
+    region = dict(REGION, places=REGION["places"] + [["Espírito Santo do Pinhal", 58]])
+    m = cities.matcher(region, "Itu")
+    assert cities.other_state("Feira agita Espírito Santo do Pinhal neste fim de semana", m) == ""
+    assert cities.other_state("Chuva forte no Espírito Santo deixa feridos", m) == "ES"
+    assert cities.other_state("Acidente em Espírito Santo do Pinhal (RN)", m) == "RN"
+
+
+def test_summary_read_from_the_page_goes_through_the_avoid_list(collect_module, config):
+    config["avoid"] = ["eleição"]
+    sid = config["sections"][0]["id"]
+    news = {sid: [{"title": "Prefeito visita obra", "summary": "Na véspera da eleição, o prefeito...",
+                   "summary_from": "page"},
+                  {"title": "Ponte é reaberta", "summary": "A ponte foi reaberta ontem.", "summary_from": "page"},
+                  {"title": "Feira na praça", "summary": "Fala da eleição, mas veio do feed."}]}
+    collect_module.drop_avoided_pages(config, news)
+    assert [n["title"] for n in news[sid]] == ["Ponte é reaberta", "Feira na praça"]
+
+
+def test_region_saved_leaves_a_marker_and_a_whole_config(collect_module, config, tmp_path):
+    path = tmp_path / "config.json"
+    path.write_text("{}")
+    config["region"] = {"places": [["Salto", 9]]}
+    collect_module.save_config(config, str(path), str(tmp_path))
+    assert json.loads(path.read_text())["region"]["places"] == [["Salto", 9]]
+    assert (tmp_path / "config.changed").exists() and not (tmp_path / "config.json.tmp").exists()
+
+
+def test_feeds_keeps_looking_after_a_bad_feed_and_ignores_old_items(monkeypatch):
+    feeds = load("feeds")
+    fresh = feed(*[(f"Falha {i}", f"https://o.example/{i}", 1, None, "Um resumo de verdade.") for i in range(6)])
+    stale = feed(*[(f"Falha {i}", f"https://o.example/{i}", 24 * 400, None, "Um resumo de verdade.")
+                   for i in range(6)])
+    bare = feed(*[(f"Falha {i}", f"https://o.example/{i}", 1, None, "") for i in range(6)])
+    pages = {"https://o.example/a": bare, "https://o.example/b": fresh}
+    monkeypatch.setattr(feeds, "discover", lambda site: list(pages))
+    monkeypatch.setattr(feeds.collect, "fetch", lambda url, tries=2: pages[url].encode())
+    assert feeds.first_good("https://o.example", [], True, now=NOW)[0] == "https://o.example/b"
+    pages["https://o.example/b"] = stale
+    assert feeds.first_good("https://o.example", [], True, now=NOW) is None

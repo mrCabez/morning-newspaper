@@ -847,7 +847,10 @@ def build():
             return {}
         r = dict(item)
         # A section story only its title backs becomes a brief below: it needs no text.
-        title_only = where != "headline" and not item.get("url") and r.get("ref") in refs \
+        # Same rule as the conversion further down: no researched page of its own (no url, or the
+        # collected one repeated).
+        title_only = where != "headline" and r.get("ref") in refs \
+            and (not item.get("url") or item.get("url") == refs[r["ref"]].get("url")) \
             and not (refs[r["ref"]].get("summary") or "").strip()
         if r.get("ref"):
             base = refs.get(r["ref"])
@@ -1224,7 +1227,10 @@ def build():
     # network blocked can bring 2 stories where the morning had 5). Nothing is written; the model
     # keeps the published edition unless the reader chooses to replace it (--replace).
     if existing and not standalone and not a.replace:
-        before = len(existing.get("link_ids") or existing.get("links") or []) or (len(existing.get("titles") or []) + 1 if existing.get("headline") else 0)
+        # "stories" since v1.13.0: link_ids also hold a story's second address (Google News and the
+        # outlet's page), so they no longer count stories.
+        before = existing.get("stories") if isinstance(existing.get("stories"), int) else \
+            len(existing.get("link_ids") or existing.get("links") or []) or (len(existing.get("titles") or []) + 1 if existing.get("headline") else 0)
         if before > total:
             print(f"KEEP: today's edition No. {number:03d} is already published with {before} stories; "
                   f"this reissue has {total}. Nothing was written.")
@@ -1265,6 +1271,7 @@ def build():
         "file": f"editions/{day.isoformat()}.html",
         "extras": {"history": hist.get("summary") or short(hist.get("text", "")),
                    "did_you_know": dyk.get("summary") or short(dyk.get("text", ""))},
+        "stories": total,  # what the reissue guard compares (link_ids may hold two per story)
         "titles": [n.get("title", "") for n in stories[1:]],
         # The titles as collected (before rewriting): what the next collections are compared against.
         "source_titles": [refs[n["ref"]].get("title", "") for n in stories if n.get("ref") in refs],

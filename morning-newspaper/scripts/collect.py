@@ -866,6 +866,28 @@ def enrich_news(cfg, news, cutoff, tz):
     return done
 
 
+def drop_avoided_pages(cfg, news):
+    """A summary read from the story's page may carry a word the reader avoids: the avoid lists
+    apply to it as they did to the feeds' own summaries."""
+    for sec in cfg["sections"]:
+        avoid = phrases(list(cfg.get("avoid") or []) + list(sec.get("avoid") or []))
+        if avoid and news.get(sec["id"]):
+            news[sec["id"]] = [n for n in news[sec["id"]] if n.get("summary_from") != "page"
+                               or not avoided(f"{n['title']} {n['summary']}", avoid)]
+
+
+def save_config(cfg, path, work):
+    """Writes the config through a temporary file (an interrupted write never leaves a broken
+    config) and leaves WORK/config.changed, which outlives this run: a second collection before
+    assemble.py no longer rebuilds the list, and the config must still be published."""
+    tmp = path + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(cfg, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+    with open(os.path.join(work, "config.changed"), "w", encoding="utf-8") as f:
+        f.write("region\n")
+
+
 # ---------------------------------------------------------------- results gathered by the model
 
 def result_date(txt, tz, now):
@@ -1203,8 +1225,7 @@ def main():
                 REGION.clear()
                 REGION.update(cities.matcher(region, city_name))
                 try:
-                    with open(a.config, "w", encoding="utf-8") as f:
-                        json.dump(cfg, f, ensure_ascii=False, indent=2)
+                    save_config(cfg, a.config, a.work)
                     config_changed = True
                     region_note = (f"REGION: list of {len(region['places'])} nearby places built from {region['source']} "
                                    f"({region['radius_km']} km); assemble.py publishes the updated config.json")
@@ -1219,6 +1240,7 @@ def main():
                                "assemble.py. Once only: the scripts replace it with real data later")
         news, failures = collect_news(cfg, window, now, used_links, used_titles, tz)
         enriched = enrich_news(cfg, news, now - dt.timedelta(hours=window), tz)
+        drop_avoided_pages(cfg, news)
         weather, wf = collect_weather(cfg)
         failures += wf
         try:

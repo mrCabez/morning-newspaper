@@ -16,6 +16,7 @@ Usage:
 import argparse
 import collections
 import concurrent.futures as cf
+import datetime as dt
 import json
 import os
 import re
@@ -65,12 +66,18 @@ def discover(site):
     return out[:6]
 
 
-def check(url, keywords):
-    """(items, with summary, with a keyword) of a feed, or None when it is not a usable feed."""
+FRESH_DAYS = 7  # a feed qualifies only with recent items: old ones are dropped by the collection
+
+
+def check(url, keywords, now=None):
+    """(items, with summary, with a keyword) of a feed's recent items (dated within FRESH_DAYS),
+    or None when it is not a usable feed."""
     try:
         items = collect.read_rss(url)
     except Exception:
         return None
+    cutoff = (now or dt.datetime.now(dt.timezone.utc)) - dt.timedelta(days=FRESH_DAYS)
+    items = [it for it in items if it.get("date") is not None and it["date"] >= cutoff]
     if len(items) < MIN_ITEMS:
         return None
     summed = sum(1 for it in items if it["summary"])
@@ -78,10 +85,10 @@ def check(url, keywords):
     return len(items), summed, fit
 
 
-def first_good(site, keywords, local):
+def first_good(site, keywords, local, now=None):
     """The site's first feed that is worth adding, as (url, items, with summary, with a keyword)."""
     for url in discover(site):
-        res = check(url, keywords)
+        res = check(url, keywords, now)
         if not res:
             continue
         n, summed, fit = res
@@ -89,7 +96,6 @@ def first_good(site, keywords, local):
         # section, the feed must bring stories of the section, not the whole paper.
         if summed * 2 >= n and (local or not keywords or fit * 5 >= n):
             return url, n, summed, fit
-        return None
     return None
 
 
@@ -98,7 +104,7 @@ def is_regional(n):
     return any(f == "city" or f.startswith(("city (", "near ")) for f in n.get("flags") or [])
 
 
-def suggest(cfg, collected):
+def suggest(cfg, collected, now=None):
     """{section id: [(feed url, items, with summary, with a keyword)]}"""
     city = (cfg.get("city") or {}).get("name", "")
     jobs = []
@@ -116,7 +122,7 @@ def suggest(cfg, collected):
         jobs += [(sec["id"], site, keywords, local) for site in sites]
     out = {s["id"]: [] for s in cfg["sections"]}
     with cf.ThreadPoolExecutor(max_workers=8) as ex:
-        results = list(ex.map(lambda j: first_good(j[1], j[2], j[3]), jobs))
+        results = list(ex.map(lambda j: first_good(j[1], j[2], j[3], now), jobs))
     for (sid, *_), res in zip(jobs, results):
         if res and len(out[sid]) < PER_SECTION:
             out[sid].append(res)

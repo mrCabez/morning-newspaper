@@ -138,8 +138,9 @@ def lead(page, title, story_words, generic=()):
 
     paras = paragraphs(page)
     # Start at the first paragraph that is about the story (shares a word with its title).
-    start = next((i for i, p in enumerate(paras[:8]) if story_words(p) & title_w), 0)
-    body = " ".join(paras[start:start + 4]) if paras else info.get("body", "")
+    # None of them is: no paragraph is used (a paywall or cookie notice is not the story).
+    start = next((i for i, p in enumerate(paras[:8]) if story_words(p) & title_w), None)
+    body = " ".join(paras[start:start + 4]) if start is not None else ("" if paras else info.get("body", ""))
     desc = info.get("description", "")
     text = ""
     for cand in (body, desc, info.get("body", "")):
@@ -216,9 +217,20 @@ def site_search(site, title, read_feed, same_story):
         return None
     url = site.rstrip("/") + "/?" + urllib.parse.urlencode({"s": " ".join(words), "feed": "rss2"})
     for it in read_feed(url)[:10]:
-        if same_story(it["title"], title) and str(it.get("url", "")).startswith("https://"):
+        if same_title(it["title"], title) and str(it.get("url", "")).startswith("https://"):
             return it
     return None
+
+
+def same_title(a, b):
+    """The same story's title, not just the same subject: the shorter title's words are all in the
+    longer one, but for one ("City council approves school budget" is not "City council approves
+    hospital expansion"). Replacing a story's address needs this certainty; when unsure, Google
+    News' own lookup is used instead."""
+    wa, wb = (set(w.lower() for w in re.findall(r"\w{3,}", t)) for t in (a, b))
+    if len(wa) > len(wb):
+        wa, wb = wb, wa
+    return len(wa) >= 3 and len(wa - wb) <= (1 if len(wa) >= 6 else 0)
 
 
 def enrich_one(item, deps):
@@ -252,9 +264,11 @@ def enrich_one(item, deps):
         page = ""
     if not text and feed_summary and len(deps["story_words"](feed_summary) - deps["story_words"](title)) >= 4:
         text = cut(feed_summary)
-    if not text:
-        return {"page_url": url} if url != item["url"] else {}
-    out = {"summary": text, "page_url": url}
+    out = {}
+    if url != item["url"]:
+        out["page_url"] = url
     if when:
-        out["published"] = when
+        out["published"] = when  # an old page is flagged even when it adds nothing to the title
+    if text:
+        out["summary"], out["page_url"] = text, url
     return out

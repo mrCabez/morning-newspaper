@@ -338,14 +338,20 @@ def other_state(title, prepared):
     home = prepared.get("state") or ""
     if home not in BR_STATES or all_caps(title):
         return ""
+    # A place of the region whose name holds a state's ("Espírito Santo do Pinhal") is that place,
+    # not the state: its words are blanked before looking for state names.
+    text = title or ""
+    for place in places_in(text, prepared):
+        text = re.sub(rf"(?<!\w){re.escape(place[0])}(?!\w)", lambda m: " " * len(m.group(0)), text,
+                      flags=re.I)
     for uf, name in BR_STATES.items():
         if uf == home:
             continue
-        if re.search(rf"(?:\(|\s[-–—/,]\s?|/){uf}\b|\b{uf}\)|\s{uf}$", title or ""):
+        if re.search(rf"(?:\(|\s[-–—/,]\s?|/){uf}\b|\b{uf}\)|\s{uf}$", text):
             return uf
         # The state's name as written (capital and accent): "Pará" is the state, "para" is a
         # preposition, and "Pará de Minas" is a town.
-        if re.search(rf"(?<!\w){re.escape(name)}(?!\w)(?! de Minas)", title or ""):
+        if re.search(rf"(?<!\w){re.escape(name)}(?!\w)(?! de Minas)", text):
             return uf
     return ""
 
