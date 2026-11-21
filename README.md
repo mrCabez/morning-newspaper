@@ -54,7 +54,7 @@ morning-newspaper/            the skill (this folder is what goes in the zip)
   references/                 setup, writing rules, JSON format, newsstand, style, permissions
   assets/edition.html         edition template
   assets/archive.html         newsstand page
-  assets/i18n/*.json          UI labels (en, pt-BR, es)
+  assets/i18n/*.json          UI labels (en, pt-BR, es, it)
 dist/morning-newspaper.zip    development build (may be ahead of the latest release)
 build-zip.sh                  rebuilds the zip
 tests/                        automated tests (pytest, offline)
