@@ -500,3 +500,10 @@ def test_marker_is_written_before_the_config_is_replaced(collect_module, config,
     with pytest.raises(OSError):
         collect_module.save_config(config, str(path), str(tmp_path))
     assert (tmp_path / "config.changed").exists() and path.read_text() == "{}"
+
+
+def test_site_of_never_takes_google_news_as_an_outlet():
+    feeds = load("feeds")
+    assert feeds.site_of({"url": "https://news.google.com/rss/articles/X"}) == ""
+    assert feeds.site_of({"url": "https://evil.example/?u=news.google.com"}) == "https://evil.example"
+    assert feeds.site_of({"url": "https://www.o.example/a/b"}) == "https://www.o.example"

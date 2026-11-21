@@ -36,10 +36,8 @@ MIN_ITEMS = 5
 def site_of(n):
     site = n.get("site") or ""
     if not site:
-        url = n.get("url") or ""
-        if "news.google.com" in url:
-            return ""
-        p = urllib.parse.urlparse(url)
+        # A Google News link is no outlet's site: news.google.com is in SKIP_SITES, checked by host below.
+        p = urllib.parse.urlparse(n.get("url") or "")
         site = f"{p.scheme}://{p.netloc}" if p.scheme == "https" and p.netloc else ""
     host = urllib.parse.urlparse(site).netloc.lower().removeprefix("www.")
     return "" if not host or any(host == s or host.endswith("." + s) for s in SKIP_SITES) else site.rstrip("/")
