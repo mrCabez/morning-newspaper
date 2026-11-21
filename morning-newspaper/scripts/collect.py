@@ -55,7 +55,7 @@ try:
 except Exception:  # pragma: no cover
     ZoneInfo = None
 
-UA = "morning-newspaper/1.12.0 (+github.com/oantuneshenriqueo/morning-newspaper; personal newspaper; RSS reader)"
+UA = "morning-newspaper/1.13.0 (+github.com/oantuneshenriqueo/morning-newspaper; personal newspaper; RSS reader)"
 TIMEOUT = 12
 MAX_BYTES = 5_000_000
 # Stories are only compared against the latest editions: a headline from months ago must not

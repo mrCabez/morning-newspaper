@@ -2,7 +2,7 @@
 
 All notable changes to Morning Newspaper. Each release on GitHub uses the matching section below as its notes.
 
-## Unreleased
+## v1.13.0 — 2026-11-21
 
 From the debug report of scheduled edition No. 010: the story texts had become the headline reworded, because most candidates come from Google News searches, which send no summary.
 
