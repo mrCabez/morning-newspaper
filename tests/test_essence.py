@@ -431,6 +431,10 @@ def test_site_search_needs_the_same_title_not_the_same_subject(enrich, collect_m
     assert enrich.same_title("Motorista fica ferido após caminhão cair de ponte",
                              "Motorista fica ferido após caminhão cair de ponte em Salto")
     assert not enrich.same_title("City council approves school budget", "City council approves hospital expansion")
+    assert not enrich.same_title("Company cuts 10 jobs", "Company cuts 20 jobs")
+    assert not enrich.same_title("Prefeitura anuncia 120 vagas em concurso público municipal",
+                                 "Prefeitura anuncia 150 vagas em concurso público municipal")
+    assert enrich.same_title("Company cuts 10 jobs", "Company cuts 10 jobs in Ohio")
 
 
 def test_an_old_page_is_flagged_even_without_a_summary(enrich, collect_module):
@@ -483,3 +487,16 @@ def test_feeds_keeps_looking_after_a_bad_feed_and_ignores_old_items(monkeypatch)
     assert feeds.first_good("https://o.example", [], True, now=NOW)[0] == "https://o.example/b"
     pages["https://o.example/b"] = stale
     assert feeds.first_good("https://o.example", [], True, now=NOW) is None
+
+
+def test_marker_is_written_before_the_config_is_replaced(collect_module, config, tmp_path, monkeypatch):
+    path = tmp_path / "config.json"
+    path.write_text("{}")
+
+    def broken_replace(*a):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(collect_module.os, "replace", broken_replace)
+    with pytest.raises(OSError):
+        collect_module.save_config(config, str(path), str(tmp_path))
+    assert (tmp_path / "config.changed").exists() and path.read_text() == "{}"

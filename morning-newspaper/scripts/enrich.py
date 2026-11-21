@@ -225,9 +225,12 @@ def site_search(site, title, read_feed, same_story):
 def same_title(a, b):
     """The same story's title, not just the same subject: the shorter title's words are all in the
     longer one, but for one ("City council approves school budget" is not "City council approves
-    hospital expansion"). Replacing a story's address needs this certainty; when unsure, Google
+    hospital expansion"), and its numbers are the same. Replacing a story's address needs this certainty; when unsure, Google
     News' own lookup is used instead."""
-    wa, wb = (set(w.lower() for w in re.findall(r"\w{3,}", t)) for t in (a, b))
+    na, nb = (set(re.findall(r"\d+(?:[.,]\d+)*", t)) for t in (a, b))
+    if na and nb and na != nb:
+        return False  # "cuts 10 jobs" is not "cuts 20 jobs"
+    wa, wb = (set(w.lower() for w in re.findall(r"\w{3,}", t)) | n for t, n in ((a, na), (b, nb)))
     if len(wa) > len(wb):
         wa, wb = wb, wa
     return len(wa) >= 3 and len(wa - wb) <= (1 if len(wa) >= 6 else 0)

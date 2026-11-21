@@ -883,9 +883,10 @@ def save_config(cfg, path, work):
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
-    os.replace(tmp, path)
+    # The marker first: an extra publication is harmless, a changed config left unpublished is not.
     with open(os.path.join(work, "config.changed"), "w", encoding="utf-8") as f:
         f.write("region\n")
+    os.replace(tmp, path)
 
 
 # ---------------------------------------------------------------- results gathered by the model
