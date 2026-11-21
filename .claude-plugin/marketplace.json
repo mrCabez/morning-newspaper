@@ -14,10 +14,10 @@
         "source": "git-subdir",
         "url": "https://github.com/oantuneshenriqueo/morning-newspaper.git",
         "path": "morning-newspaper",
-        "ref": "v1.12.0"
+        "ref": "v1.13.0"
       },
       "strict": false,
-      "version": "1.12.0",
+      "version": "1.13.0",
       "description": "Builds today's edition of a personal retro morning newspaper (1980s–90s print style) with your agenda, emails awaiting a reply, weather and news on your interests, kept in a private newsstand.",
       "author": {
         "name": "oantuneshenriqueo",
