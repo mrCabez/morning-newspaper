@@ -52,6 +52,7 @@
  "weather_in": "El tiempo en {city}",
  "source": "Fuente",
  "source_short": "fuente",
+ "briefs_title": "En pocas líneas",
  "headline": "Titular",
  "illustration": "Ilustración",
  "illustration_aria": "Ilustración en trama",

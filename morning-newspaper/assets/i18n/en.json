@@ -52,6 +52,7 @@
  "weather_in": "Weather in {city}",
  "source": "Source",
  "source_short": "source",
+ "briefs_title": "In brief",
  "headline": "Headline",
  "illustration": "Illustration",
  "illustration_aria": "Halftone illustration",

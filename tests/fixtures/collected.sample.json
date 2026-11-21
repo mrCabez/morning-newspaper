@@ -9,17 +9,17 @@
  "news": {
   "tech": [
    {"id": "a1", "title": "Major browser patches actively exploited flaw", "outlet": "Example Tech", "url": "https://tech.example.com/a1", "date": "2026-11-13 06:10", "summary": ""},
-   {"id": "a2", "title": "New open model tops coding benchmark", "outlet": "Example AI", "url": "https://ai.example.com/a2", "date": "2026-11-12 21:40", "summary": ""},
+   {"id": "a2", "title": "New open model tops coding benchmark", "outlet": "Example AI", "url": "https://ai.example.com/a2", "date": "2026-11-12 21:40", "summary": "The open model beats larger models on the coding test, its lab says."},
    {"id": "a3", "title": "Password manager reports data breach", "outlet": "Example Sec", "url": "https://sec.example.com/a3", "date": "2026-11-12 18:00", "summary": ""}
   ],
   "local": [
-   {"id": "b1", "title": "City repaves Main Street next week", "outlet": "Springfield Daily", "url": "https://local.example.com/b1", "date": "2026-11-12 15:00", "summary": ""}
+   {"id": "b1", "title": "City repaves Main Street next week", "outlet": "Springfield Daily", "url": "https://local.example.com/b1", "date": "2026-11-12 15:00", "summary": "Work on the new asphalt on Main Street starts next week, the city says."}
   ],
   "money": [
-   {"id": "c1", "title": "Central bank holds interest rates steady", "outlet": "Example Money", "url": "https://money.example.com/c1", "date": "2026-11-12 14:00", "summary": ""}
+   {"id": "c1", "title": "Central bank holds interest rates steady", "outlet": "Example Money", "url": "https://money.example.com/c1", "date": "2026-11-12 14:00", "summary": "The central bank kept rates where they were, so savers see no change this month."}
   ],
   "games": [
-   {"id": "d1", "title": "Farming sim gets big winter update", "outlet": "Example Games", "url": "https://games.example.com/d1", "date": "2026-11-12 12:00", "summary": ""}
+   {"id": "d1", "title": "Farming sim gets big winter update", "outlet": "Example Games", "url": "https://games.example.com/d1", "date": "2026-11-12 12:00", "summary": "The winter update adds snow and new crops to the farm."}
   ]
  },
  "history": [

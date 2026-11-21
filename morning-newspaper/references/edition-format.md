@@ -10,7 +10,8 @@ The only text you write per edition, in the reader's language. `scripts/assemble
   "classifieds": [{"text": "...", "url": "https://mail.google.com/mail/u/0/#inbox/ID"}],
   "sections": {
     "tech":  [{"ref": "a6", "title": "...", "text": "1 to 2 sentences."}],
-    "local": [{"ref": "b2", "title": "...", "text": "..."}]
+    "local": [{"ref": "b2", "title": "...", "text": "..."},
+              {"ref": "b5", "title": "...", "brief": true}]
   },
   "history": {"ref": "h1", "text": "In 2020, ..."},
   "did_you_know": {"ref": "k1", "text": "..."},
@@ -28,6 +29,7 @@ Rules:
 - Keys under `sections` are the section `id`s from config.json. Missing or empty = the section is not printed.
 - `ref` is a collected ID (`a1`, `b3`, `h2`…). URL, outlet and date are filled in automatically. For a story found outside the collection (fallback search), replace `ref` with `"url": "https://..."` and `"outlet": "Name"`.
 - The headline's section label is taken from its `ref`; set `"section"` only to override it.
+- `brief: true` (section stories only): printed in the "In brief" column as its title and source, with no text. Used for a story with only its title (`assemble.py` sets it by itself for those and prints `BRIEFS:`), or one with a summary that is worth only a line. Briefs count in `total_news`, not in their section's `count`. A text that only restates its title gets an `ECHO:` line.
 - Headline researched in another page: keep its `ref` (the repeat checks need it) and add `"url"` and `"outlet"` of the page whose facts you used. They replace the collected link and outlet in the printed source.
 - `icon` (headline illustration): pick the one that fits the subject; an unknown name or none prints `newspaper`.
   - Politics and society: `capitol` (government), `ballot` (elections), `gavel` (courts, justice), `shield` (security, defense), `megaphone` (protests, announcements), `people` (society, population), `globe` (world), `city` (city, region).
