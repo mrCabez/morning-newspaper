@@ -12,7 +12,11 @@
   "city": {
     "name": "Springfield",
     "latitude": 39.7817,
-    "longitude": -89.6501
+    "longitude": -89.6501,
+    "country": "US"
+  },
+  "region": {
+    "radius_km": 60
   },
   "news_locale": {
     "hl": "en-US",

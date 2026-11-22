@@ -56,6 +56,11 @@ a{color:var(--azul)}a:hover{color:var(--verm)}
 .par h3,.solo h3{font-size:18px;line-height:1.15;margin:8px 0 4px}
 .par p,.solo p{font-size:15.5px;line-height:1.38;margin:0}
 .solo{margin-top:20px;border-top:1px solid var(--tinta);padding-top:12px}
+.breves{margin-top:22px;border:1.5px dashed var(--tinta);background:var(--claro);padding:10px 12px}
+.breves .cab{font-size:14px;text-align:center;border-bottom:1px solid var(--tinta);padding-bottom:4px}
+.breve-sec{font-size:12px;letter-spacing:1px;color:var(--azul);margin-top:10px}
+.breve{position:relative;font-size:15.5px;line-height:1.38;margin:4px 0 0;padding-left:14px}
+.breve::before{content:"\25A0";position:absolute;left:0;top:1px;font-size:9px}
 .extras{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin-top:24px}
 .extra{padding:10px 12px;border:1.5px solid var(--tinta)}
 .extra.hist{background:var(--most);color:var(--tinta)}
@@ -175,6 +180,8 @@ a{color:var(--azul)}a:hover{color:var(--verm)}
 <!--/IF:classifieds_block-->
 
 {{{SECTIONS_HTML}}}
+
+{{{BRIEFS_HTML}}}
 
 <!--IF:week-->
 <section class="solo">

@@ -428,6 +428,10 @@ def test_junk_titles(collect_module, title, outlet, junk):
     ("Report for January 2026", True),
     ("Dados de março de 2025", True),
     ("Dezembro de 2026 terá feriado", False),
+    # Italian ships with a label file, so its months need no config.labels
+    ("Inflazione di luglio in calo", True),
+    ("Saldi previsti a dicembre", False),
+    ("Bilancio di settembre", True),
 ])
 def test_other_month(collect_module, title, flagged):
     assert collect_module.other_month(title, dt.date(2026, 11, 13)) is flagged

@@ -9,7 +9,8 @@ Write everything in the reader's language (`config.language`). The paper sounds 
 
 ## Section stories
 - Title up to 12 words.
-- Text: 1 to 2 sentences. With an empty summary there is only the title: say its fact in other words and add nothing (no "initial" problems when the title says problems).
+- Text: 1 to 2 sentences that tell what the summary adds to the title: who, where, when, how many, what comes next. Never the title again in other words; `assemble.py` prints `ECHO:` when a text does only that.
+- A story with only its title is a **brief** (`"brief": true`, no text): one line in the "In brief" column with its source. Restating a title in a paragraph adds length, not news. Keep the summary's hedges ("teria perdido o controle", "allegedly") in the text.
 - The source link ("Source: outlet") is added by the script.
 
 ## Copyright (mandatory)

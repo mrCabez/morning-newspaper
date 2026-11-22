@@ -28,6 +28,38 @@ def test_user_agent_matches_version():
     assert f"morning-newspaper/{VERSION}" in source
 
 
+def test_plugin_marketplace_points_to_a_released_version():
+    """The plugin entry names a version that was already released (its tag exists): the release
+    workflow moves it to the new tag only after publishing, so an app syncing on every push never
+    sees a missing tag. It never runs ahead of VERSION."""
+    market = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_text(encoding="utf-8"))
+    assert market["name"] == "morning-newspaper"
+    assert market["owner"]["name"]
+    [plugin] = market["plugins"]
+    assert plugin["name"] == "morning-newspaper"
+    version = plugin["version"]
+    assert re.fullmatch(r"\d+\.\d+\.\d+", version), version
+    key = lambda v: tuple(int(x) for x in v.split("."))
+    assert key(version) <= key(VERSION), "the plugin must not point to an unreleased version"
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert re.search(rf"^## v{re.escape(version)}\b", changelog, re.M)
+    source = plugin["source"]
+    assert source["source"] == "git-subdir"
+    assert source["url"] == "https://github.com/oantuneshenriqueo/morning-newspaper.git"
+    assert source["path"] == SKILL.name
+    assert source["ref"] == f"v{version}"
+    # claude.ai / desktop sync needs strict: false when the plugin has no plugin.json.
+    assert plugin["strict"] is False
+    assert (ROOT / source["path"] / "SKILL.md").is_file()
+    # The entry is the manifest: a plugin.json would need to agree with it.
+    assert not (SKILL / ".claude-plugin").exists()
+
+
+def test_release_workflow_moves_the_plugin_after_publishing():
+    workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+    assert workflow.index("Publish the release") < workflow.index("Point the plugin marketplace")
+
+
 def frontmatter():
     text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
     m = re.match(r"---\n(.*?)\n---\n", text, re.S)

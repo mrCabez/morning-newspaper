@@ -15,8 +15,10 @@ import pytest
 from conftest import ROOT, SKILL
 
 SCRIPTS = sorted((SKILL / "scripts").glob("*.py"))
+# Fixed hosts only: the stories' own pages and their outlets' search feeds come from the collected
+# links at run time (enrich.py), never from an address written in a script.
 ALLOWED_HOSTS = {"news.google.com", "wttr.in", "api.open-meteo.com", "open-meteo.com", "wikipedia.org",
-                 "mail.google.com"}
+                 "mail.google.com", "servicodados.ibge.gov.br", "download.geonames.org"}
 BANNED_IMPORTS = {"subprocess", "socket", "pickle", "marshal", "ctypes", "shelve", "requests", "http.server"}
 BANNED_CALLS = {"eval", "exec", "compile", "__import__", "system", "popen", "spawnl", "spawnv", "execv", "execl"}
 

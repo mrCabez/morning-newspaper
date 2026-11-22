@@ -2,6 +2,30 @@
 
 All notable changes to Morning Newspaper. Each release on GitHub uses the matching section below as its notes.
 
+## v1.13.0 — 2026-11-21
+
+From the debug report of scheduled edition No. 010: the story texts had become the headline reworded, because most candidates come from Google News searches, which send no summary.
+
+### New
+- **Stories with substance.** `collect.py` reads the opening of the story's own page for the first title-only candidates of each section (`scripts/enrich.py`): the page's description or first paragraphs, cut near 380 characters. Google News links are turned into the outlet's address through the outlet's own search feed or Google News' own lookup, and the printed link then points to the outlet. A page dated before the window flags the candidate `old page? MM-DD`. Capped at 18 pages and 45 seconds per edition.
+- **"In brief" column.** A story with only its title is printed as one line with its source (`"brief": true`), never as a paragraph that restates the title; `assemble.py` does it by itself (`BRIEFS:`). A text that only restates its title gets an `ECHO:` line.
+- **Summaries win.** Between stories of similar relevance, the one with a summary is chosen, in every slot. When two candidates tell the same fact, the one with a summary is kept. Photo captions at the start of a feed's description (g1 and other portals) are removed, and a description that is only a caption no longer counts as a summary.
+- **Nearby places.** `scripts/cities.py` builds, once per city, the list of towns, villages and districts within `region.radius_km` (60 by default) with their distance: IBGE in Brazil, GeoNames elsewhere, and a list written by the model only when no source answers (replaced by real data after 30 days). No population cut. Local candidates are flagged `near Salto 9km`, `city (district)`, `other state? RN` or `where?`, and sorted by distance.
+- **Direct feeds.** `scripts/feeds.py` finds the own RSS feeds of the outlets that bring each section's stories and checks that they carry summaries; setup offers to add them.
+
+### Changed
+- The fallback headline is written in up to 3 sentences, as many as its title and summary back.
+
+## v1.12.0 — 2026-11-19
+
+### New
+- **Install as a plugin, with updates on their own.** This repository is now a plugin marketplace. In the Claude desktop app: **Customize → Plugins → Add marketplace**, enter `oantuneshenriqueo/morning-newspaper`, keep **Sync automatically** on and install **morning-newspaper**. In Claude Code: `/plugin marketplace add oantuneshenriqueo/morning-newspaper`, then `/plugin install morning-newspaper@morning-newspaper`. The plugin always holds the latest release, never unreleased work. If you used the zip before, delete that skill after installing the plugin so Claude does not see two copies; your newsstand is not touched. In the desktop app a plugin skill may not show in the `/` menu: type `/morning-newspaper:morning-newspaper` or just ask for your morning newspaper.
+
+### Fixed
+From the debug report of scheduled edition No. 009.
+- **Classifieds said "Gmail not connected" over an empty inbox.** An inbox that was read and has nothing waiting for a reply is now `[]`, and `assemble.py` warns when the agenda or classifieds key is missing, since that prints "not connected".
+- **A name added from memory at the start of a sentence went unchecked** ("Pavel Durov negou…"). The first word now counts as a possible name when a capitalized word follows it, unless it is an ordinary opening word ("Após", "Segundo", "Também", "After", "Tras", adverbs in -mente / -ly).
+
 ## v1.11.0 — 2026-11-18
 
 From the debug reports of scheduled editions No. 007 and No. 008.
